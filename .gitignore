@@ -1,3 +1,7 @@
+# Generated data
+results/
+
+# Tooling
 .hg
 .svn
 .idea

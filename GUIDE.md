@@ -7,9 +7,9 @@ Note: This file is auto generated based on comments in the code base.
 
 <!-- ARTIFACT_GUIDE:START -->
 
-## TEST
+## Benchmarking
 
-- Title here: [./.gitignore#5](./.gitignore#5)
+- Microbenchmark: Freezing vs. Pickling and Unpickling: [./benchmarks/pickling-vs-freeze/README.md#3](./benchmarks/pickling-vs-freeze/README.md#3)
 
 <!-- ARTIFACT_GUIDE:END -->
 

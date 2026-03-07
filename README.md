@@ -7,6 +7,9 @@ version with the modifications described in the paper. Differences
 between the paper and the implementation are documented in
 [DIFFERENCES.md](./DIFFERENCES.md)
 
+The [GUIDE.md](./GUIDE.md) file contains links to examples, benchmarks
+and implementation details that are part of this artifact.
+
 ## Troubleshooting
 
 ## License

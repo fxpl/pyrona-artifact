@@ -46,30 +46,33 @@ require_cmd() {
 
 resolve_python_bin() {
     local dir="$1"
-    local -a candidates
-    local candidate
-    local os_name
+    local abs_dir
+    local unix_candidate
+    local exe_candidate
 
-    os_name="$(uname -s 2>/dev/null || true)"
+    abs_dir="$(cd "$dir" && pwd -P)" || die "failed to resolve absolute path: $dir"
+    unix_candidate="$abs_dir/python"
+    exe_candidate="$abs_dir/python.exe"
 
-    case "$os_name" in
-        CYGWIN*|MINGW*|MSYS*|Windows_NT)
-            candidates=("python.exe" "python")
-            ;;
-        *)
-            # Prefer native unix name first, but still support .exe artifacts.
-            candidates=("python" "python.exe")
-            ;;
-    esac
+    # Prefer python.exe first to avoid false positives from case-insensitive
+    # filesystems where a 'Python' directory can match 'python'.
+    if [ -f "$exe_candidate" ]; then
+        printf '%s' "$exe_candidate"
+        return 0
+    fi
 
-    for candidate in "${candidates[@]}"; do
-        if [ -x "$dir/$candidate" ] || [ -f "$dir/$candidate" ]; then
-            printf '%s' "$dir/$candidate"
-            return 0
-        fi
-    done
+    if [ -f "$unix_candidate" ] && [ -x "$unix_candidate" ]; then
+        printf '%s' "$unix_candidate"
+        return 0
+    fi
 
-    die "built python binary not found in $dir (checked: ${candidates[*]})"
+    # Last resort for uncommon builds that emit a non-executable python file.
+    if [ -f "$unix_candidate" ]; then
+        printf '%s' "$unix_candidate"
+        return 0
+    fi
+
+    die "built python binary not found in $abs_dir (checked: python, python.exe)"
 }
 
 upsert_env_var() {
