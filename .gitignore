@@ -1,1 +1,9 @@
+.hg
+.svn
+.idea
+.vscode
+__pycache__
+.pytest_cache
+.mypy_cache
+
 snapshots

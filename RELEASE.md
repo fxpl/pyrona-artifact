@@ -8,3 +8,9 @@
     ```
     ./scripts/create_cpython_snapshots.sh
     ```
+3. Update `GUIDE.md`
+    ```
+    python3 ./scripts/build_navigation_guide.py
+    ```
+
+
