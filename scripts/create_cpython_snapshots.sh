@@ -4,7 +4,7 @@ set -euo pipefail
 
 BASELINE_REPO_DEFAULT="git@github.com:python/cpython.git"
 PATCHED_REPO_DEFAULT="git@github.com:fxpl/cpython.git"
-BASELINE_REF_DEFAULT="754e7c9b"
+BASELINE_REF_DEFAULT="aeff92d86a3"
 PATCHED_REF_DEFAULT="immutable-main"
 OUTPUT_DIR_DEFAULT="snapshots"
 MANIFEST_DEFAULT="$OUTPUT_DIR_DEFAULT/snapshot-manifest.json"
@@ -77,6 +77,22 @@ resolve_ref_to_commit() {
     || die "could not resolve ref '$ref' in repo '$repo_dir'"
 }
 
+to_abs_path() {
+  local path="$1"
+
+  if [ "${path#/}" != "$path" ]; then
+    printf '%s\n' "$path"
+    return
+  fi
+
+  local dir
+  local base
+  dir="$(dirname "$path")"
+  base="$(basename "$path")"
+
+  printf '%s/%s\n' "$(cd "$dir" && pwd -P)" "$base"
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --baseline-repo)
@@ -133,6 +149,14 @@ require_cmd mktemp
 require_cmd sed
 require_cmd tar
 
+mkdir -p "$OUTPUT_DIR"
+mkdir -p "$(dirname "$MANIFEST_PATH")"
+mkdir -p "$(dirname "$SOURCES_PATH")"
+
+OUTPUT_DIR="$(to_abs_path "$OUTPUT_DIR")"
+MANIFEST_PATH="$(to_abs_path "$MANIFEST_PATH")"
+SOURCES_PATH="$(to_abs_path "$SOURCES_PATH")"
+
 BASELINE_DIR="$OUTPUT_DIR/cpython-baseline"
 PATCHED_DIR="$OUTPUT_DIR/cpython-patched"
 
@@ -140,10 +164,6 @@ if [ "$FORCE" -eq 0 ]; then
   [ ! -e "$BASELINE_DIR" ] || die "$BASELINE_DIR exists; remove it or rerun without --no-force"
   [ ! -e "$PATCHED_DIR" ] || die "$PATCHED_DIR exists; remove it or rerun without --no-force"
 fi
-
-mkdir -p "$OUTPUT_DIR"
-mkdir -p "$(dirname "$MANIFEST_PATH")"
-mkdir -p "$(dirname "$SOURCES_PATH")"
 
 TMP_ROOT="$(mktemp -d -t cpython-snapshots-XXXXXX)"
 cleanup() {
@@ -160,7 +180,7 @@ export_snapshot() {
   local commit
 
   echo "[info] cloning $name repo: $repo"
-  git clone --quiet --no-checkout "$repo" "$clone_dir"
+  git clone --no-checkout "$repo" "$clone_dir"
 
   echo "[info] resolving $name ref: $ref"
   commit="$(resolve_ref_to_commit "$clone_dir" "$ref")"
@@ -192,8 +212,8 @@ PATCHED_REPO=$PATCHED_REPO
 PATCHED_REF=$PATCHED_REF
 PATCHED_COMMIT=$PATCHED_COMMIT
 SNAPSHOT_OUTPUT_DIR=$OUTPUT_DIR
-BASELINE_SNAPSHOT_DIR=$BASELINE_DIR
-PATCHED_SNAPSHOT_DIR=$PATCHED_DIR
+BASELINE_PYTHON_DIR=$BASELINE_DIR
+PATCHED_PYTHON_DIR=$PATCHED_DIR
 EOF
 
 cat > "$MANIFEST_PATH" <<EOF

@@ -23,7 +23,7 @@ Then write built interpreter paths back into the env file:
     PATCHED_PYTHON_BIN
 
 Options:
-    --env-file <path>       Env file with BASELINE_SNAPSHOT_DIR and PATCHED_SNAPSHOT_DIR
+    --env-file <path>       Env file with BASELINE_PYTHON_DIR and PATCHED_PYTHON_DIR
                                (default: $ENV_FILE_DEFAULT)
     --jobs <n>              Pass explicit job count to make (uses plain -j when omitted)
     -h, --help              Show this help
@@ -128,8 +128,8 @@ require_cmd make
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 
-[ -n "${BASELINE_SNAPSHOT_DIR:-}" ] || die "BASELINE_SNAPSHOT_DIR is missing in $ENV_FILE"
-[ -n "${PATCHED_SNAPSHOT_DIR:-}" ] || die "PATCHED_SNAPSHOT_DIR is missing in $ENV_FILE"
+[ -n "${BASELINE_PYTHON_DIR:-}" ] || die "BASELINE_PYTHON_DIR is missing in $ENV_FILE"
+[ -n "${PATCHED_PYTHON_DIR:-}" ] || die "PATCHED_PYTHON_DIR is missing in $ENV_FILE"
 
 run_build() {
     local label="$1"
@@ -143,6 +143,7 @@ run_build() {
     (
         cd "$dir"
         ./configure --enable-optimizations
+        make clean
         if [ -n "$MAKE_JOBS" ]; then
             make -j "$MAKE_JOBS"
         else
@@ -151,19 +152,19 @@ run_build() {
     )
 }
 
-run_build "baseline" "$BASELINE_SNAPSHOT_DIR"
-run_build "patched" "$PATCHED_SNAPSHOT_DIR"
+run_build "baseline" "$BASELINE_PYTHON_DIR"
+run_build "patched" "$PATCHED_PYTHON_DIR"
 
-BASELINE_PYTHON_BIN="$(resolve_python_bin "$BASELINE_SNAPSHOT_DIR")"
-PATCHED_PYTHON_BIN="$(resolve_python_bin "$PATCHED_SNAPSHOT_DIR")"
+BASELINE_PYTHON_BIN="$(resolve_python_bin "$BASELINE_PYTHON_DIR")"
+PATCHED_PYTHON_BIN="$(resolve_python_bin "$PATCHED_PYTHON_DIR")"
 
 upsert_env_var "BASELINE_PYTHON_BIN" "$BASELINE_PYTHON_BIN" "$ENV_FILE"
 upsert_env_var "PATCHED_PYTHON_BIN" "$PATCHED_PYTHON_BIN" "$ENV_FILE"
 
 cat <<EOF
 [done] builds completed
-    baseline: $BASELINE_SNAPSHOT_DIR
-    patched:  $PATCHED_SNAPSHOT_DIR
+    baseline: $BASELINE_PYTHON_DIR
+    patched:  $PATCHED_PYTHON_DIR
     baseline python: $BASELINE_PYTHON_BIN
     patched python:  $PATCHED_PYTHON_BIN
     env file: $ENV_FILE
