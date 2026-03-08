@@ -10,6 +10,8 @@ Note: This file is auto generated based on comments in the code base.
 ## Benchmarking
 
 - Microbenchmark: Freezing vs. Pickling and Unpickling: [./benchmarks/pickling-vs-freeze/README.md#3](./benchmarks/pickling-vs-freeze/README.md#3)
+- PyPerformance Benchmarks: [./benchmarks/pyperformance/README.md#3](./benchmarks/pyperformance/README.md#3)
+- Microbenchmark: Running CPython tests: [./benchmarks/tests/README.md#3](./benchmarks/tests/README.md#3)
 
 <!-- ARTIFACT_GUIDE:END -->
 
