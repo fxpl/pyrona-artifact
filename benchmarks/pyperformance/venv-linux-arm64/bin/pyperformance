@@ -1,0 +1,6 @@
+#!/home/runner/work/pyrona-artifact/pyrona-artifact/benchmarks/pyperformance/venv-linux-arm64/bin/python
+import sys
+from pyperformance.cli import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())
