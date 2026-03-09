@@ -1,6 +1,7 @@
 # Generated data
 results/
-venv
+venv/
+.venv/
 
 # Tooling
 .hg
@@ -10,5 +11,6 @@ venv
 __pycache__
 .pytest_cache
 .mypy_cache
+.profraw
 
 snapshots

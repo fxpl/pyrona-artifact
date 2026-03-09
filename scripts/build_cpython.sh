@@ -75,30 +75,6 @@ resolve_python_bin() {
     die "built python binary not found in $abs_dir (checked: python, python.exe)"
 }
 
-upsert_env_var() {
-    local key="$1"
-    local value="$2"
-    local file="$3"
-    local tmp
-
-    tmp="$(mktemp -t snapshot-sources-XXXXXX)"
-    awk -v key="$key" -v value="$value" '
-        BEGIN { updated = 0 }
-        $0 ~ "^" key "=" {
-            print key "=" value
-            updated = 1
-            next
-        }
-        { print }
-        END {
-            if (!updated) {
-                print key "=" value
-            }
-        }
-    ' "$file" > "$tmp"
-    mv "$tmp" "$file"
-}
-
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --env-file)
@@ -158,14 +134,10 @@ run_build "patched" "$PATCHED_PYTHON_DIR"
 BASELINE_PYTHON_BIN="$(resolve_python_bin "$BASELINE_PYTHON_DIR")"
 PATCHED_PYTHON_BIN="$(resolve_python_bin "$PATCHED_PYTHON_DIR")"
 
-upsert_env_var "BASELINE_PYTHON_BIN" "$BASELINE_PYTHON_BIN" "$ENV_FILE"
-upsert_env_var "PATCHED_PYTHON_BIN" "$PATCHED_PYTHON_BIN" "$ENV_FILE"
-
 cat <<EOF
 [done] builds completed
     baseline: $BASELINE_PYTHON_DIR
-    patched:  $PATCHED_PYTHON_DIR
     baseline python: $BASELINE_PYTHON_BIN
+    patched:  $PATCHED_PYTHON_DIR
     patched python:  $PATCHED_PYTHON_BIN
-    env file: $ENV_FILE
 EOF
