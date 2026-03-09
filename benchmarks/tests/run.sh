@@ -2,7 +2,6 @@
 
 set -euo pipefail
 
-ESTIMATED_RUNTIME="5 minutes"
 TESTOPTS="-x test_freeze -x test_ssl"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,7 +44,6 @@ run_make_test() {
 	echo "[info]     with TESTOPTS='$TESTOPTS'" >&2
 	echo "[info]         '-x test_freeze'  to ignore tests added by us" >&2
 	echo "[info]         '-x test_ssl'     because test_ssl is flaky on baseline" >&2
-	echo "[info]         '-j1' to use a single worker" >&2
 
 	(
 		cd "$dir"
@@ -53,8 +51,6 @@ run_make_test() {
 	)
 }
 
-echo "[info] This benchmark can take $ESTIMATED_RUNTIME to run" >&2
-echo "" >&2
 run_make_test "baseline" "$BASELINE_PYTHON_DIR" "$BASELINE_OUTPUT_FILE"
 run_make_test "patched" "$PATCHED_PYTHON_DIR" "$PATCHED_OUTPUT_FILE"
 

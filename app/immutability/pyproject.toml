@@ -1,0 +1,14 @@
+[project]
+name = "artifact"
+version = "0.1.0"
+description = "A nice artifact for OOPSLA 2026"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "streamlit>=1.53.0",
+    "streamlit-pdf>=2.0.1",
+    "streamlit-pdf-viewer>=0.0.27",
+    "numpy>=2.0.2",
+    "watchdog>=6.0.0",
+    "streamlit_code_editor>=0.1.22"
+]

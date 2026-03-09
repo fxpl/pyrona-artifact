@@ -18,24 +18,36 @@ die() {
 	exit 1
 }
 
+require_wheel_in_wheelhouse() {
+	local package_name="$1"
+	if ! find "$WHEELHOUSE_DIR" -maxdepth 1 -type f -name "${package_name}-*.whl" | grep -q .; then
+		die "required wheel for '${package_name}' not found in wheelhouse: $WHEELHOUSE_DIR"
+	fi
+}
+
 require_env "BASELINE_PYTHON_BIN"
 require_env "PATCHED_PYTHON_BIN"
 
-USE_PREMADE_VENV=1
-for arg in "$@"; do
-	case "$arg" in
-		--no-premade-venv)
-			USE_PREMADE_VENV=0
-			;;
-		--help|-h)
-			echo "usage: $0 [--no-premade-venv]" >&2
-			exit 0
-			;;
-		*)
-			die "unknown argument: $arg"
-			;;
-	esac
-done
+FAST_MODE=0
+
+case "${1:-}" in
+	"" )
+		;;
+	"--help"|"-h")
+		echo "usage: $0 [--fast]" >&2
+		exit 0
+		;;
+	"--fast")
+		FAST_MODE=1
+		;;
+	*)
+		die "unknown argument: $1"
+		;;
+esac
+
+if [ "$#" -gt 1 ]; then
+	die "too many arguments"
+fi
 
 detect_target_os() {
 	local host_os_raw
@@ -82,24 +94,20 @@ export PIP_NO_INDEX=1
 
 TARGET_OS="$(detect_target_os)"
 TARGET_ARCH="$(detect_target_arch)"
-PREMADE_VENV_DIR="$SCRIPT_DIR/venv-$TARGET_OS-$TARGET_ARCH"
 
-if [ "$USE_PREMADE_VENV" -eq 1 ] && [ -x "$PREMADE_VENV_DIR/bin/python" ]; then
-	echo "[info] using premade pyperformance environment: $PREMADE_VENV_DIR" >&2
-	source "$PREMADE_VENV_DIR/bin/activate"
-	command -v pyperformance >/dev/null 2>&1 || die "pyperformance not found in premade venv: $PREMADE_VENV_DIR"
-else
-	if [ "$USE_PREMADE_VENV" -eq 1 ]; then
-		echo "[info] premade venv not found, creating fresh environment at: $SCRIPT_DIR/venv" >&2
-	else
-		echo "[info] --no-premade-venv set, creating fresh environment at: $SCRIPT_DIR/venv" >&2
-	fi
+WHEELHOUSE_DIR="${PIP_FIND_LINKS:-$SCRIPT_DIR/wheelhouse-$TARGET_OS-$TARGET_ARCH}"
+[ -d "$WHEELHOUSE_DIR" ] || die "wheelhouse directory not found: $WHEELHOUSE_DIR"
+export PIP_FIND_LINKS="$WHEELHOUSE_DIR"
 
-	python3 -m venv "$SCRIPT_DIR/venv"
-	source "$SCRIPT_DIR/venv/bin/activate"
-	python -m pip install --disable-pip-version-check --upgrade pip
-	python -m pip install --disable-pip-version-check pyperformance
-fi
+require_wheel_in_wheelhouse "setuptools"
+require_wheel_in_wheelhouse "wheel"
+require_wheel_in_wheelhouse "pyperformance"
+
+VENV_DIR="venv"
+"$BASELINE_PYTHON_BIN" -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+python -m pip install --disable-pip-version-check --no-index --find-links "$WHEELHOUSE_DIR" \
+	--upgrade "setuptools>=18.5" wheel pyperformance
 
 run_pyperformance() {
 	local label="$1"
@@ -109,14 +117,30 @@ run_pyperformance() {
 
 	echo "[info] running 'pyperformance' for $label" >&2
 	echo "[info]     writing output to: $output_file" >&2
-	echo "[info]     redirecting console output to: $log_file" >&2
-	pyperformance run \
-		--inherit-environ PIP_DISABLE_PIP_VERSION_CHECK \
-		--inherit-environ PIP_NO_INDEX \
-		-p "$bin" \
-		-o "$output_file" \
+	echo "[info]     writing pyperformance logs to: $log_file" >&2
+	echo "[info]     using wheelhouse: $PIP_FIND_LINKS" >&2
+
+	local pyperformance_args=(
+		run
+		--inherit-environ PIP_DISABLE_PIP_VERSION_CHECK
+		--inherit-environ PIP_NO_INDEX
+		--inherit-environ PIP_FIND_LINKS
+		-p "$bin"
+		-o "$output_file"
+		--debug-single-value
+	)
+
+	if [ "$FAST_MODE" -eq 1 ]; then
+		echo "[info]     fast mode: enabled" >&2
+		pyperformance_args+=(--fast)
+	fi
+
+	pyperformance "${pyperformance_args[@]}" \
 		> "$log_file" 2>&1
 }
+
+rm -f "$BASELINE_OUTPUT_FILE"
+rm -f "$PATCHED_OUTPUT_FILE"
 
 # Run benchmark
 run_pyperformance "baseline" "$BASELINE_PYTHON_BIN" "$BASELINE_OUTPUT_FILE" "$BASELINE_LOG_FILE"
