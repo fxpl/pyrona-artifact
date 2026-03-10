@@ -2,10 +2,11 @@
 
 set -euo pipefail
 
+INVOKE_DIR="$(pwd)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+PYTHON_BIN="${BASELINE_PYTHON_BIN:-python3}"
 
 detect_target_os() {
     local host_os_raw
@@ -41,16 +42,28 @@ detect_target_arch() {
 
 TARGET_OS="$(detect_target_os)"
 TARGET_ARCH="$(detect_target_arch)"
-WHEELHOUSE_DIR="${WHEELHOUSE_DIR:-$SCRIPT_DIR/wheelhouse-$TARGET_OS-$TARGET_ARCH}"
+
+if [ -n "${WHEELHOUSE_DIR:-}" ]; then
+    case "$WHEELHOUSE_DIR" in
+        /*)
+            ;;
+        *)
+            WHEELHOUSE_DIR="$INVOKE_DIR/$WHEELHOUSE_DIR"
+            ;;
+    esac
+else
+    WHEELHOUSE_DIR="$SCRIPT_DIR/wheelhouse-$TARGET_OS-$TARGET_ARCH"
+fi
 
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     cat <<'EOF'
 Usage: build_wheelhouse.sh
 
 Environment variables:
-  PYTHON_BIN      Python used to create helper venv (default: python3)
-  WHEELHOUSE_DIR  Output wheelhouse directory
-                                    (default: ./wheelhouse-<os>-<arch>)
+    BASELINE_PYTHON_BIN     Preferred Python used to create helper venv
+                            (default: python3)
+    WHEELHOUSE_DIR          Output wheelhouse directory
+                            (default: ./wheelhouse-<os>-<arch>)
 
 This script downloads wheels for:
 - bootstrap packages used by pyperformance benchmark venvs
