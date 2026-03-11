@@ -1,0 +1,196 @@
+name: Build Docker Images
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      artifact_version:
+        description: Version label used in archive names and Zenodo metadata
+        required: false
+        type: string
+      zenodo_deposition_id:
+        description: Draft deposition id to upload into
+        required: false
+        type: string
+
+concurrency:
+  group: docker-images-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: pyrona-artifact
+  CPYTHON_MAKE_JOBS: 4
+
+jobs:
+  build-images:
+    name: Build ${{ matrix.platform }} image
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            archive_suffix: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            archive_suffix: linux-arm64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Derive archive metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version_input="${{ inputs.artifact_version || '' }}"
+          if [ -n "$version_input" ]; then
+            version="$version_input"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            version="${{ github.event.release.tag_name }}"
+          else
+            version="${{ github.ref_name }}-${{ github.run_number }}"
+          fi
+
+          archive_name="${IMAGE_NAME}-${{ matrix.archive_suffix }}.docker.zip"
+          tar_path="${RUNNER_TEMP}/${IMAGE_NAME}-${{ matrix.archive_suffix }}.docker.tar"
+          image_tag="${IMAGE_NAME}:${version}-${{ matrix.archive_suffix }}"
+
+          {
+            echo "version=$version"
+            echo "archive_name=$archive_name"
+            echo "tar_path=$tar_path"
+            echo "image_tag=$image_tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image archive
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          tags: ${{ steps.meta.outputs.image_tag }}
+          build-args: |
+            CPYTHON_MAKE_JOBS=${{ env.CPYTHON_MAKE_JOBS }}
+          outputs: type=docker,dest=${{ steps.meta.outputs.tar_path }}
+          cache-from: type=gha,scope=${{ matrix.archive_suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.archive_suffix }}
+
+      - name: Package Docker image archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -j -1 "${RUNNER_TEMP}/${{ steps.meta.outputs.archive_name }}" "${{ steps.meta.outputs.tar_path }}"
+
+      - name: Generate checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          sha256sum "${{ steps.meta.outputs.archive_name }}" > "${{ steps.meta.outputs.archive_name }}.sha256"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ matrix.archive_suffix }}
+          path: |
+            ${{ runner.temp }}/${{ steps.meta.outputs.archive_name }}
+            ${{ runner.temp }}/${{ steps.meta.outputs.archive_name }}.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  upload-zenodo:
+    name: Upload package to Zenodo
+    needs:
+      - build-images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download image archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: docker-image-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/docker-images
+
+      - name: Prepare Zenodo package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_parent="${RUNNER_TEMP}/zenodo-package"
+          artifact_root="$package_parent/pyrona-artifact"
+          upload_dir="${RUNNER_TEMP}/zenodo-upload"
+
+          mkdir -p "$artifact_root"
+          mkdir -p "$upload_dir"
+
+          # Mirror repository contents without git metadata.
+          tar -C "$GITHUB_WORKSPACE" --exclude='.git' -cf - . | tar -C "$artifact_root" -xf -
+
+          # Place Docker archives/checksums under pyrona-artifact/docker/.
+          rm -rf "$artifact_root/docker"
+          mkdir -p "$artifact_root/docker"
+          cp "${RUNNER_TEMP}/docker-images/"* "$artifact_root/docker/"
+
+          (
+            cd "$package_parent"
+            zip -r -1 "$upload_dir/pyrona-artifact.zip" pyrona-artifact
+          )
+
+      - name: Resolve Zenodo configuration
+        id: zenodo
+        shell: bash
+        env:
+          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+          SECRET_DEPOSITION_ID: ${{ secrets.ZENODO_DEPOSITION_ID }}
+        run: |
+          set -euo pipefail
+
+          deposition_id="${{ inputs.zenodo_deposition_id || '' }}"
+          if [ -z "$deposition_id" ]; then
+            deposition_id="$SECRET_DEPOSITION_ID"
+          fi
+
+          if [ -z "$ZENODO_TOKEN" ]; then
+            echo "Zenodo token is not configured; skipping upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "$deposition_id" ]; then
+            echo "Zenodo deposition id is not configured; skipping upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "enabled=true"
+            echo "deposition_id=$deposition_id"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload package to Zenodo
+        if: steps.zenodo.outputs.enabled == 'true'
+        shell: bash
+        env:
+          ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+          ZENODO_DEPOSITION_ID: ${{ steps.zenodo.outputs.deposition_id }}
+        run: |
+          set -euo pipefail
+          bash scripts/release/upload_zenodo.sh "${RUNNER_TEMP}/zenodo-upload"

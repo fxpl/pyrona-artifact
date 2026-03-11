@@ -13,46 +13,67 @@ st.markdown(\
 """
 This website provides a simple interface to interact with our modified
 version of Python and to recreate parts of the paper. All bash commands
-and Python scripts shown here can also manually be executed in the docker
-container to on your local machine.
+and Python scripts shown here can also be executed manually in the Docker
+container or on your local machine.
 
-## Verify Environment
+## Smoke Test
+
+### Verify Environment
 
 This website expects certain environment variables to be set and binaries
 to be present. The following is a dynamic status check:
 """)
 
-util.validate_required_envs(util.EXPECTED_ENV, [util.BASELINE_BIN_ENV, util.PATCHED_BIN_ENV])
+util.validate_required_envs(util.EXPECTED_ENV, [util.PATCHED_PYTHON_BIN, util.STABLE_PYTHON_BIN])
+
+st.markdown(\
+"""
+### Minimal Smoke Test
+
+You can click the "Run" button in the corner to run a minimal smoke test.
+""")
+
+util.editable_bash_block("scripts/smoketest.sh --minimal", "smoketest-minimal")
+
+
+st.markdown(\
+"""
+### Full Smoke Test
+
+You can click the "Run" button in the corner to run a full smoke test. This
+may take up to 10 minutes.
+
+""")
+
+util.editable_bash_block("scripts/smoketest.sh", "smoketest")
+
 
 st.markdown(\
 """
 ## Tutorial
 
 This artifact uses interactive code blocks to show bash commands or
-python scripts before executing them. The run button in the corner
-of the code block can be used to run the script in the root of the
-docker container. The output is displayed as part of the website.
+Python scripts. You can run them using the "Run" button in the top-right
+corner of each code block. You can also modify a code block before running it.
 
-You can modify the scripts before running them. Be aware that all
-modifications will be lost when the website reloads. So make sure
-to safe important scripts before changing pages.
+Be aware that all modifications will be lost when the website reloads.
 
 Note that these scripts have destructive powers. Deleting files may
-break the artifact and require a restart. But all changes should be
-contained to the docker container, since we don't mount external files.
+break the artifact and require a restart. However, all changes should remain
+inside the Docker container because we do not mount external files.
 
-Here is an example of a bash script
+Here is an example of a Bash script:
 """)
 
-util.editable_bash_block("echo 'Hello Bash'", "hello-bash", output_lines=2)
+util.editable_bash_block("echo 'Hello Bash'", "hello-bash")
 
 st.markdown(\
 """
-And this is an editable python script:
+And this is an editable Python script:
 """
 )
 
-util.editable_python_block("""print("Howdy, from Python")""", "hello-python", output_lines=2)
+util.editable_python_block("""print("Howdy, from Python")""", "hello-python")
 
 st.markdown(\
 """
@@ -72,11 +93,11 @@ for i in range(60):
 
 st.markdown(\
 """
-While a script is running you can change tabs in your browser but closing
+While a script is running, you can change tabs in your browser, but closing
 the website will stop any running commands.
 
 This website doesn't support standard input for scripts. If you
-need this you can always run the commands and python scripts manually
-in the docker container.
+need this, you can always run the commands and Python scripts manually
+in the Docker container.
 """
 )

@@ -19,6 +19,9 @@ Note that this artifact runs the benchmarks in a docker container. It
 is likely that this reproduction is less stable and may differ from
 a run outside a container. And other processes running on your machine
 during benchmarking may also effect the results.
+
+Almost all of these scripts are configurable. Try the help command to
+see all possible options.
 """)
 
 st.markdown(\
@@ -26,7 +29,12 @@ st.markdown(\
 ### PyPerformance Benchmarks
 
 This runs the default pyperformance benchmarking suite and reports the result.
-The script has an optional `--fast` argument to "Get rough answers quickly".
+The script has an optional `--mode` argument with the following options:
+
+- `single`:   Run a single iteration (For debugging)
+- `fast`:     Fast but rough answers
+- `default`:  Well the default
+- `rigorous`: Spend longer running tests to get more accurate resultsF
 
 This benchmark may take:
 - 60 minutes on normal mode
@@ -37,7 +45,14 @@ that are too big for this website. The logs are instead written to a log file
 in the docker container and can be inspected.
 """)
 
-util.editable_bash_block("""bash benchmarks/pyperformance/run.sh --fast""", "bench-pyperf", output_lines=30)
+util.editable_bash_block(
+    """bash benchmarks/pyperformance/run.sh --mode fast""",
+    "bench-pyperf",
+    output_lines=30,
+    on_finished=util.make_pdf_display_callback(
+        "benchmarks/pyperformance/results/results.pdf",
+    ),
+)
 
 st.markdown(\
 """
@@ -62,4 +77,16 @@ with the time needed to pickle and unpickle them instead.
 
 The execution may take up to 5 minutes.
 """)
-util.editable_bash_block("""bash benchmarks/pickling-vs-freeze/run.sh""", "bench-pickle")
+util.editable_bash_block("""bash benchmarks/pickling-vs-freeze/run.sh""", "bench-pickle", output_lines=25)
+
+st.markdown(\
+"""
+### Direct Sharing Across Sub-interpreters
+
+This benchmark uses sub-interpreters to invert 4x4 matrices.
+The graph shows the comparison of using pickling vs freezing
+as a sharing mechanism.
+
+The execution may take up to 10 minutes.
+""")
+util.editable_bash_block("""benchmarks/subinterpreters/immutable-matrix-inversion/run.sh""", "bench-direct-sharing", output_lines=25)

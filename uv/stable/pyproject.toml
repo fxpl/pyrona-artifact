@@ -1,0 +1,15 @@
+[project]
+name = "pldi26-artifact"
+version = "0.1.0"
+description = "PLDI26 Artifact"
+readme = "README.md"
+license = "MIT"
+dependencies = [
+    "streamlit==1.55.0",
+    "streamlit-pdf==2.0.1",
+    "streamlit-pdf-viewer==0.0.27",
+    "streamlit_code_editor==0.1.22",
+    "watchdog==6.0.0",
+    "matplotlib==3.10.8",
+    "pyperformance==1.14.0",
+]

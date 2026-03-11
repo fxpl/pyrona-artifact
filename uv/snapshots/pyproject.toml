@@ -1,0 +1,10 @@
+[project]
+name = "pldi26-artifact"
+version = "0.1.0"
+description = "PLDI26 Artifact"
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = [
+    "bocpy==0.2.0"
+]

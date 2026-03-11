@@ -3,6 +3,7 @@
 set -euo pipefail
 
 TESTOPTS="-x test_freeze -x test_ssl"
+CLEANUP_RESULTS=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -20,15 +21,43 @@ die() {
 	exit 1
 }
 
-require_env "BASELINE_PYTHON_DIR"
+cleanup_results() {
+	if [ "$CLEANUP_RESULTS" -eq 1 ]; then
+		rm -rf "$RESULTS_DIR"
+	fi
+}
+
+on_exit() {
+	[ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
+	cleanup_results
+}
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--cleanup-results)
+			CLEANUP_RESULTS=1
+			shift
+			;;
+		-h|--help)
+			echo "Usage: $0 [--cleanup-results]" >&2
+			exit 0
+			;;
+		*)
+			die "unknown argument: $1"
+			;;
+	esac
+done
+
+require_env "BASELINE_BUILD_DIR"
 require_env "BASELINE_PYTHON_BIN"
-require_env "PATCHED_PYTHON_DIR"
+require_env "PATCHED_BUILD_DIR"
 require_env "PATCHED_PYTHON_BIN"
 
 # Setup output directory and files
 RESULTS_DIR="results"
 BASELINE_OUTPUT_FILE="$RESULTS_DIR/baseline-output.txt"
 PATCHED_OUTPUT_FILE="$RESULTS_DIR/patched-output.txt"
+trap on_exit EXIT
 mkdir -p "$RESULTS_DIR"
 
 run_make_test() {
@@ -51,8 +80,8 @@ run_make_test() {
 	)
 }
 
-run_make_test "baseline" "$BASELINE_PYTHON_DIR" "$BASELINE_OUTPUT_FILE"
-run_make_test "patched" "$PATCHED_PYTHON_DIR" "$PATCHED_OUTPUT_FILE"
+run_make_test "baseline" "$BASELINE_BUILD_DIR" "$BASELINE_OUTPUT_FILE"
+run_make_test "patched" "$PATCHED_BUILD_DIR" "$PATCHED_OUTPUT_FILE"
 
 python3 "$SCRIPT_DIR/compare.py" \
 	--baseline "$BASELINE_OUTPUT_FILE" \

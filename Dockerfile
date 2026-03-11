@@ -36,38 +36,32 @@ RUN apt-get update \
 		zlib1g-dev \
 	&& rm -rf /var/lib/apt/lists/*
 
-# Validate that python3 is available.
-RUN python3 --version
-
 WORKDIR ${APP_DIR}
 COPY . ${APP_DIR}
 
-# Build both CPython snapshots in the image.
-RUN scripts/build_cpython.sh --jobs ${CPYTHON_MAKE_JOBS}
-
-# Export values from snapshots/snapshot-sources.env as process environment variables.
-RUN cat > /etc/profile.d/snapshot-sources.sh <<EOF
-set -a
-source "${APP_DIR}/snapshots/snapshot-sources.env"
-set +a
-EOF
-
-# Interactive website (optional)
+# UV as a build manager
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-# uv installs to ~/.local/bin by default
 ENV PATH="/root/.local/bin:${PATH}"
-
 # Don't collect usage data (Why is this the default to begin with...)
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 
-WORKDIR "${APP_DIR}/app/immutability"
+# Export env.env for login and non-interactive bash shells.
+RUN cat > /etc/profile.d/artifact-env.sh <<EOF
+set -a
+source "${APP_DIR}/env.env"
+set +a
+EOF
+ENV BASH_ENV=/etc/profile.d/artifact-env.sh
 
-RUN uv python install && \
-    uv venv && \
-    uv sync
+# Build snapshots and Python environments used by the artifact.
+RUN scripts/setup/1_build_cpython.sh --jobs ${CPYTHON_MAKE_JOBS}
+RUN scripts/setup/2_build_venv.sh
+RUN scripts/setup/3_pyperformance_setup.sh
+
+RUN scripts/smoketest.sh --minimal
 
 EXPOSE 8501
-ENTRYPOINT ["/bin/bash","-lc","source /etc/profile.d/snapshot-sources.sh && exec .venv/bin/python -m streamlit run artifact.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true"]
+ENTRYPOINT ["/bin/bash","-lc","source \"$STABLE_PYTHON_ENV_ACTIVATE\" && python -m streamlit run app/immutability/artifact.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true"]
 
 # ENV SHELL=/bin/bash
-# CMD ["/bin/bash", "-lc", "source /etc/profile.d/snapshot-sources.sh && exec /bin/bash"]
+# CMD ["/bin/bash", "-lc", "exec /bin/bash"]

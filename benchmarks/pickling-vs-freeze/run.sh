@@ -16,20 +16,81 @@ require_env() {
 require_env "BASELINE_PYTHON_BIN"
 require_env "PATCHED_PYTHON_BIN"
 
+usage() {
+	echo "Usage: $0 [--size N] [--num-trials N] [--cleanup-results]"
+}
+
+SIZE_ARGS=()
+TRIAL_ARGS=()
+CLEANUP_RESULTS=0
+
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		--size)
+			if [ "$#" -lt 2 ]; then
+				echo "Missing value for --size" >&2
+				usage >&2
+				exit 1
+			fi
+			SIZE_ARGS=(--size "$2")
+			shift 2
+			;;
+		--num-trials)
+			if [ "$#" -lt 2 ]; then
+				echo "Missing value for --num-trials" >&2
+				usage >&2
+				exit 1
+			fi
+			TRIAL_ARGS=(--num-trials "$2")
+			shift 2
+			;;
+		--cleanup-results)
+			CLEANUP_RESULTS=1
+			shift
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		*)
+			echo "Unknown argument: $1" >&2
+			usage >&2
+			exit 1
+			;;
+	esac
+	done
+
 RESULTS_DIR="results"
 FREEZE_RESULTS="$RESULTS_DIR/freeze.json"
 PICKLE_RESULTS="$RESULTS_DIR/pickle.json"
+
+cleanup_results() {
+	if [ "$CLEANUP_RESULTS" -eq 1 ]; then
+		rm -rf "$RESULTS_DIR"
+	fi
+}
+
+on_exit() {
+	[ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
+	cleanup_results
+}
+
+trap on_exit EXIT
 
 mkdir -p "$RESULTS_DIR"
 
 echo "Collecting pickle timings with baseline Python: $BASELINE_PYTHON_BIN"
 "$BASELINE_PYTHON_BIN" "$SCRIPT_DIR/microbenchmark.py" \
 	--collect pickle \
+	"${SIZE_ARGS[@]}" \
+	"${TRIAL_ARGS[@]}" \
 	--output "$PICKLE_RESULTS"
 
 echo "Collecting freeze timings with patched Python: $PATCHED_PYTHON_BIN"
 "$PATCHED_PYTHON_BIN" "$SCRIPT_DIR/microbenchmark.py" \
 	--collect freeze \
+	"${SIZE_ARGS[@]}" \
+	"${TRIAL_ARGS[@]}" \
 	--output "$FREEZE_RESULTS"
 
 echo "Comparing freeze vs pickle results"

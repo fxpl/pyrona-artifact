@@ -6,22 +6,17 @@ import re
 import copy
 import signal
 import threading
+from typing import Callable
 from code_editor import code_editor
 
 EXPECTED_ENV = [
-    "BASELINE_REPO",
-    "BASELINE_REF",
-    "BASELINE_COMMIT",
-    "PATCHED_REPO",
-    "PATCHED_REF",
-    "PATCHED_COMMIT",
-    "SNAPSHOT_OUTPUT_DIR",
-    "BASELINE_PYTHON_DIR",
-    "PATCHED_PYTHON_DIR",
+    "BASELINE_PYTHON_ENV_ACTIVATE",
+    "PATCHED_PYTHON_ENV_ACTIVATE",
+    "STABLE_PYTHON_ENV_ACTIVATE",
 ]
 
-BASELINE_BIN_ENV = "BASELINE_PYTHON_BIN"
-PATCHED_BIN_ENV = "PATCHED_PYTHON_BIN"
+PATCHED_PYTHON_BIN = "PATCHED_PYTHON_BIN"
+STABLE_PYTHON_BIN = "STABLE_PYTHON_BIN"
 MAX_COMMAND_OUTPUT_LINES = 100
 OUTPUT_REFRESH_RATE = "250ms"
 
@@ -142,6 +137,17 @@ def _process_state_key(run_id: str) -> str:
 def _get_command_state(run_id: str) -> dict | None:
     return st.session_state.get(_process_state_key(run_id))
 
+
+def _terminate_process_group(pgid: int | None) -> bool:
+    if not pgid:
+        return False
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
 def _is_new_id(id: str) -> bool:
     handled_ids = st.session_state.setdefault("handled_ids", set())
 
@@ -158,17 +164,10 @@ def _stop_running_process(run_id: str) -> bool:
 
     state["stop_requested"] = True
     pgid = state.get("pgid")
-    if not pgid:
-        return False
-
-    try:
-        os.killpg(pgid, signal.SIGTERM)
-        return True
-    except ProcessLookupError:
-        return False
+    return _terminate_process_group(pgid)
 
 
-def _run_command_worker(commands: list[str], state: dict, cwd: str = "../..") -> None:
+def _run_command_worker(commands: list[str], state: dict, cwd: str = ".") -> None:
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     proc = None
@@ -178,7 +177,8 @@ def _run_command_worker(commands: list[str], state: dict, cwd: str = "../..") ->
             commands,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
             env=env,
             cwd=cwd,
@@ -190,10 +190,7 @@ def _run_command_worker(commands: list[str], state: dict, cwd: str = "../..") ->
         assert proc.stdout is not None
         for line in proc.stdout:
             if state.get("stop_requested") and state.get("pgid"):
-                try:
-                    os.killpg(state["pgid"], signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
+                _terminate_process_group(state["pgid"])
                 break
             _append_command_output(state, line)
 
@@ -204,10 +201,7 @@ def _run_command_worker(commands: list[str], state: dict, cwd: str = "../..") ->
         state["status"] = "failed"
         state["error"] = str(exc)
         if proc is not None and proc.poll() is None:
-            try:
-                os.killpg(proc.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            _terminate_process_group(proc.pid)
     finally:
         state["running"] = False
         state["pgid"] = None
@@ -217,7 +211,12 @@ def _run_command_worker(commands: list[str], state: dict, cwd: str = "../..") ->
                 os.remove(path)
 
 
-def _render_command_panel(title: str, run_id: str, output_lines: int = 10) -> None:
+def _render_command_panel(
+    title: str,
+    run_id: str,
+    output_lines: int = 10,
+    on_finished: Callable[[str, dict], None] | None = None,
+) -> None:
     state = _get_command_state(run_id)
     if not state:
         return
@@ -239,25 +238,47 @@ def _render_command_panel(title: str, run_id: str, output_lines: int = 10) -> No
         if state.get("output_truncated"):
             st.caption(f"Showing last {MAX_COMMAND_OUTPUT_LINES} lines of output.")
 
-        st.code(state.get("output", ""), language=None, height=27 * output_lines)
+        at_max_lines = len(state.get("output_lines", [])) >= output_lines
+        height = 21 * output_lines + 32 if at_max_lines else None
+        st.code(state.get("output", ""), language=None, height=height)
+
+    if not state.get("running") and on_finished is not None:
+        on_finished(run_id, state)
 
 
 @st.fragment(run_every=OUTPUT_REFRESH_RATE)
-def _render_command_panel_fragment(title: str, run_id: str, output_lines: int = 10) -> None:
-    _render_command_panel(title, run_id, output_lines)
+def _render_command_panel_fragment(
+    title: str,
+    run_id: str,
+    output_lines: int = 10,
+    on_finished: Callable[[str, dict], None] | None = None,
+) -> None:
+    _render_command_panel(title, run_id, output_lines, on_finished=on_finished)
 
-def _render_command_output(title: str, run_id: str, output_lines: int = 10) -> None:
+def _render_command_output(
+    title: str,
+    run_id: str,
+    output_lines: int = 10,
+    on_finished: Callable[[str, dict], None] | None = None,
+) -> None:
     state = _get_command_state(run_id)
     if state:
         if state.get("running"):
-            _render_command_panel_fragment(title, run_id, output_lines)
+            _render_command_panel_fragment(title, run_id, output_lines, on_finished=on_finished)
         else:
-            _render_command_panel(title, run_id, output_lines)
+            _render_command_panel(title, run_id, output_lines, on_finished=on_finished)
 
-def run_command(commands: list[str], run_id: str, cleanup_paths: list[str] | None = None) -> None:
+def run_command(
+    commands: list[str],
+    run_id: str,
+    cleanup_paths: list[str] | None = None,
+    cwd: str = ".",
+) -> None:
     state = _get_command_state(run_id)
     if state and state.get("running"):
         return
+
+    working_dir = os.path.abspath(cwd)
 
     state = {
         "running": True,
@@ -271,18 +292,53 @@ def run_command(commands: list[str], run_id: str, cleanup_paths: list[str] | Non
         "pgid": None,
         "stop_requested": False,
         "cleanup_paths": cleanup_paths or [],
+        "working_dir": working_dir,
     }
     st.session_state[_process_state_key(run_id)] = state
 
-    worker = threading.Thread(target=_run_command_worker, args=(commands, state), daemon=True)
+    worker = threading.Thread(target=_run_command_worker, args=(commands, state, working_dir), daemon=True)
     worker.start()
 
-def editable_bash_block(code:str, run_id: str, output_lines=10) -> None:
+def editable_bash_block(
+    code: str,
+    run_id: str,
+    output_lines: int = 10,
+    on_finished: Callable[[str, dict], None] | None = None,
+) -> None:
     # create info bar dictionary
     response_dict = code_editor(code, lang="sh", buttons=_CODE_BLOCK_BUTTONS, info=_CODE_BLOCK_INFO_BAR_BASH)
     if response_dict['type'] == "submit" and _is_new_id(response_dict["id"]) and len(response_dict['text']) != 0:
         run_command(["bash", "-lc", response_dict['text']], run_id)
-    _render_command_output("Bash Output", run_id, output_lines)
+    _render_command_output("Bash Output", run_id, output_lines, on_finished=on_finished)
+
+
+def make_pdf_display_callback(
+    pdf_path: str,
+    label: str = "Generated Plot",
+    viewer_height: int = 650,
+) -> Callable[[str, dict], None]:
+    """Return a callback that shows a button to display a PDF when it exists."""
+
+    def _on_finished(run_id: str, state: dict) -> None:
+        if state.get("returncode", 1) != 0:
+            return
+        working_dir = state.get("working_dir") or os.getcwd()
+        resolved_pdf_path = pdf_path if os.path.isabs(pdf_path) else os.path.join(working_dir, pdf_path)
+
+        path_key = re.sub(r"[^a-zA-Z0-9_-]", "-", pdf_path)
+
+        if not os.path.isfile(resolved_pdf_path):
+            st.error(f"PDF not found at: {resolved_pdf_path}")
+            return
+
+        with st.expander(label, expanded=True):
+            st.pdf(
+                resolved_pdf_path,
+                height=viewer_height,
+                key=f"pdf-viewer-{run_id}-{path_key}",
+            )
+
+    return _on_finished
 
 def _trim_outer_empty_lines(text: str) -> str:
     lines = text.splitlines()
@@ -292,7 +348,7 @@ def _trim_outer_empty_lines(text: str) -> str:
         lines = lines[:-1]
     return "\n".join(lines)
 
-def editable_python_block(code:str, run_id: str, python_env=PATCHED_BIN_ENV, output_lines=10) -> None:
+def editable_python_block(code:str, run_id: str, python_env=PATCHED_PYTHON_BIN, output_lines=10) -> None:
     code = _trim_outer_empty_lines(code)
     # create info bar dictionary
     response_dict = code_editor(code, lang="python", buttons=_CODE_BLOCK_BUTTONS, info=_CODE_BLOCK_INFO_BAR_PYTHON)
@@ -307,6 +363,6 @@ def editable_python_block(code:str, run_id: str, python_env=PATCHED_BIN_ENV, out
         else:
             if os.path.exists(temp_script_path):
                 os.remove(temp_script_path)
-            st.error(f"Unable to find the python binary. Used environment value `{PATCHED_BIN_ENV}`")
+            st.error(f"Unable to find the python binary. Used environment value `{python_env}`")
     _render_command_output("Python Output", run_id, output_lines)
 

@@ -1,7 +1,6 @@
 # Generated data
-results/
-venv/
-.venv/
+/build/
+/docker
 
 # Tooling
 .hg
@@ -12,5 +11,3 @@ __pycache__
 .pytest_cache
 .mypy_cache
 .profraw
-
-snapshots

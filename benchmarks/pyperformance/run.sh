@@ -1,15 +1,30 @@
+
 #!/usr/bin/env bash
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-require_env() {
-    local var_name="$1"
-    if [ -z "${!var_name:-}" ]; then
-        echo "Missing required environment variable: $var_name" >&2
-        exit 1
+MODE="default"
+TIMEOUT=180
+ONLINE=0
+BENCHMARKS_LIST=""
+LIST_ONLY=0
+BUILD_ENV=0
+CHECK_ENV=0
+ONLY_PRINT_ARGS=0
+CLEANUP_RESULTS=0
+
+PYPERF_RUN_DIR="$REPO_ROOT/build/pyperf"
+BASELINE_OUTPUT="$SCRIPT_DIR/results/baseline.json"
+PATCHED_OUTPUT="$SCRIPT_DIR/results/patched.json"
+COMPARE_OUTPUT="$SCRIPT_DIR/results/compare.txt"
+PLOT_OUTPUT_PATH="$SCRIPT_DIR/results/results.pdf"
+
+cleanup_results() {
+    if [ "$CLEANUP_RESULTS" -eq 1 ]; then
+        rm -rf "$SCRIPT_DIR/results"
     fi
 }
 
@@ -18,179 +33,240 @@ die() {
     exit 1
 }
 
-require_wheel_in_wheelhouse() {
-    local package_name="$1"
-    if ! find "$WHEELHOUSE_DIR" -maxdepth 1 -type f -name "${package_name}-*.whl" | grep -q .; then
-        die "required wheel for '${package_name}' not found in wheelhouse: $WHEELHOUSE_DIR"
+require_env() {
+    local var_name="$1"
+    if [ -z "${!var_name:-}" ]; then
+        die "environment variable $var_name is undefined"
     fi
 }
 
+require_cmd() {
+    command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+}
+
+require_executable() {
+    local bin_path="$1"
+    [ -x "$bin_path" ] || die "python executable not found or not executable: $bin_path"
+}
+
+require_env "STABLE_PYTHON_ENV_ACTIVATE"
 require_env "BASELINE_PYTHON_BIN"
 require_env "PATCHED_PYTHON_BIN"
+require_cmd "source"
+require_cmd "mkdir"
+require_cmd "pwd"
+require_cmd "cd"
 
-FAST_MODE=0
-ONLINE_MODE=0
-LOG_TO_FILE=0
+usage() {
+cat <<'EOF'
+Usage: run.sh [options]
 
-for arg in "$@"; do
-    case "$arg" in
-        "--help"|"-h")
-            echo "usage: $0 [--fast] [--online] [--log-file]" >&2
+Options:
+--mode <single|fast|default|rigorous>    Benchmark mode (default: default)
+--timeout <number>                       Timeout in seconds (default: 180)
+--benchmarks <LIST>                      Comma-separated benchmark selectors
+                                         NOTE: `fastapi` is disabled by default since it
+                                         is not compatible with our baseline CPython
+--list                                   List pyperformance benchmarks and exits
+-h, --help                               Show this help message
+--build-env                              Pre-downloads benchmarks to allow offline execution
+--online                                 Allows pyperformance to download benchmarks
+                                                                                 (Off by default for the artifact)
+--check-env                              Checks the status of virtual environments
+--only-print-args                        Print pyperformance args instead of running it
+--cleanup-results                        Remove generated benchmark results before exiting
+EOF
+}
+
+build_benchmarks_filter() {
+    local final_filter="$BENCHMARKS_LIST"
+
+    # Always exclude fastapi because it is incompatible with Python 3.15.
+    local default_excludes="-fastapi"
+
+    if [ "$(uname -s)" = "Darwin" ]; then
+        # Exclude dask as it requires additional permissions on MacOS
+        # Exclude 2to3 (Honestly no idea why it fails)
+        default_excludes="$default_excludes,-2to3,-dask"
+    fi
+
+    if [ -n "$final_filter" ]; then
+        final_filter="$final_filter,$default_excludes"
+    else
+        final_filter="$default_excludes"
+    fi
+
+    printf '%s' "$final_filter"
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --mode)
+            [ "$#" -ge 2 ] || die "missing value for --mode"
+            case "$2" in
+                single|fast|default|rigorous)
+                    MODE="$2"
+                    ;;
+                *)
+                    die "invalid --mode '$2' (expected: single, fast, default, rigorous)"
+                    ;;
+            esac
+            shift 2
+            ;;
+        --timeout)
+            [ "$#" -ge 2 ] || die "missing value for --timeout"
+            case "$2" in
+                ''|*[!0-9]*)
+                    die "--timeout must be a non-negative integer"
+                    ;;
+                *)
+                    TIMEOUT="$2"
+                    ;;
+            esac
+            shift 2
+            ;;
+        --benchmarks)
+            [ "$#" -ge 2 ] || die "missing value for --benchmarks"
+            [ -n "$2" ] || die "--benchmarks cannot be empty"
+            BENCHMARKS_LIST="$2"
+            shift 2
+            ;;
+        --list)
+            LIST_ONLY=1
+            shift
+            ;;
+        --online)
+            ONLINE=1
+            shift
+            ;;
+        --build-env)
+            BUILD_ENV=1
+            CHECK_ENV=1
+            shift
+            ;;
+        --check-env)
+            CHECK_ENV=1
+            shift
+            ;;
+        --only-print-args)
+            ONLY_PRINT_ARGS=1
+            shift
+            ;;
+        --cleanup-results)
+            CLEANUP_RESULTS=1
+            shift
+            ;;
+        -h|--help)
+            usage
             exit 0
             ;;
-        "--fast")
-            FAST_MODE=1
-            ;;
-        "--online")
-            ONLINE_MODE=1
-            ;;
-        "--log-file")
-            LOG_TO_FILE=1
-            ;;
         *)
-            die "unknown argument: $arg"
+            die "unknown argument: $1"
             ;;
     esac
 done
 
-detect_target_os() {
-    local host_os_raw
-    host_os_raw="$(uname -s)"
-    case "$host_os_raw" in
-        Darwin)
-            echo "macos"
-            ;;
-        Linux)
-            echo "linux"
-            ;;
-        *)
-            echo "$host_os_raw" | tr '[:upper:]' '[:lower:]'
-            ;;
-    esac
+mkdir -p "$PYPERF_RUN_DIR"
+
+ORIGINAL_DIR="$(pwd)"
+cd "$PYPERF_RUN_DIR"
+
+on_exit() {
+    [ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
+    cd "$ORIGINAL_DIR"
+    cleanup_results
 }
 
-detect_target_arch() {
-    local host_arch_raw
-    host_arch_raw="$(uname -m)"
-    case "$host_arch_raw" in
-        arm64|aarch64)
-            echo "arm64"
-            ;;
-        x86_64|amd64)
-            echo "x86_64"
-            ;;
-        *)
-            die "unsupported host architecture: $host_arch_raw"
-            ;;
-    esac
-}
+trap on_exit EXIT
 
-# Setup output directory and files
-RESULTS_DIR="$SCRIPT_DIR/results"
-BASELINE_LOG_FILE="$RESULTS_DIR/baseline-output.txt"
-BASELINE_OUTPUT_FILE="$RESULTS_DIR/baseline.json"
-PATCHED_LOG_FILE="$RESULTS_DIR/patched-output.txt"
-PATCHED_OUTPUT_FILE="$RESULTS_DIR/patched.json"
-mkdir -p "$RESULTS_DIR"
-
-export PIP_DISABLE_PIP_VERSION_CHECK=1
-
-if [ "$ONLINE_MODE" -eq 0 ]; then
-    export PIP_NO_INDEX=1
+if [ "$LIST_ONLY" -eq 1 ]; then
+    source "$STABLE_PYTHON_ENV_ACTIVATE"
+    pyperformance list
+    deactivate
+    exit 0
 fi
 
-TARGET_OS="$(detect_target_os)"
-TARGET_ARCH="$(detect_target_arch)"
-
-if [ "$ONLINE_MODE" -eq 0 ]; then
-    WHEELHOUSE_DIR="${PIP_FIND_LINKS:-$SCRIPT_DIR/wheelhouse-$TARGET_OS-$TARGET_ARCH}"
-    [ -d "$WHEELHOUSE_DIR" ] || die "wheelhouse directory not found: $WHEELHOUSE_DIR"
-    export PIP_FIND_LINKS="$WHEELHOUSE_DIR"
-
-    require_wheel_in_wheelhouse "setuptools"
-    require_wheel_in_wheelhouse "wheel"
-    require_wheel_in_wheelhouse "pyperformance"
+if [ "$BUILD_ENV" -eq 1 ]; then
+    source "$STABLE_PYTHON_ENV_ACTIVATE"
+    pyperformance venv recreate --python "$BASELINE_PYTHON_BIN" "--benchmarks=-fastapi"
+    pyperformance venv recreate --python "$PATCHED_PYTHON_BIN" "--benchmarks=-fastapi"
+    deactivate
 fi
 
-VENV_DIR="venv"
-"$BASELINE_PYTHON_BIN" -m venv "$VENV_DIR"
-source "$VENV_DIR/bin/activate"
-
-pip_install_args=(
-    --disable-pip-version-check
-    --upgrade
-    "setuptools>=18.5"
-    wheel
-    pyperformance
-)
-
-if [ "$ONLINE_MODE" -eq 0 ]; then
-    pip_install_args=(
-        --disable-pip-version-check
-        --upgrade
-        --no-index
-        --find-links "$WHEELHOUSE_DIR"
-        "setuptools>=18.5"
-        wheel
-        pyperformance
-    )
+if [ "$CHECK_ENV" -eq 1 ]; then
+    source "$STABLE_PYTHON_ENV_ACTIVATE"
+    echo "[done] Validating virtual environments:" >&2
+    pyperformance venv show --python "$BASELINE_PYTHON_BIN"
+    pyperformance venv show --python "$PATCHED_PYTHON_BIN"
+    exit 0
 fi
-
-python -m pip install "${pip_install_args[@]}"
 
 run_pyperformance() {
     local label="$1"
     local bin="$2"
     local output_file="$3"
-    local log_file="$4"
+
+    if [ -f "$output_file" ]; then
+        rm -f "$output_file"
+    fi
 
     echo "[info] running 'pyperformance' for $label" >&2
     echo "[info]     writing output to: $output_file" >&2
-    if [ "$LOG_TO_FILE" -eq 1 ]; then
-        echo "[info]     writing pyperformance logs to: $log_file" >&2
-    fi
-    if [ "$ONLINE_MODE" -eq 0 ]; then
-        echo "[info]     using wheelhouse: $PIP_FIND_LINKS" >&2
-    else
-        echo "[info]     online mode: enabled (wheelhouse bypassed)" >&2
+    if [ "$ONLINE" -eq 1 ]; then
+        echo "[info]     online mode: enabled" >&2
     fi
 
     local pyperformance_args=(
         run
         --inherit-environ PIP_DISABLE_PIP_VERSION_CHECK
-        -p "$bin"
+        --python "$bin"
         -o "$output_file"
-        --debug-single-value
     )
 
-    if [ "$ONLINE_MODE" -eq 0 ]; then
-        pyperformance_args+=(
-            --inherit-environ PIP_NO_INDEX
-            --inherit-environ PIP_FIND_LINKS
-        )
+    if [ "$ONLINE" -eq 0 ]; then
+        export PIP_NO_INDEX=1
+        pyperformance_args+=(--inherit-environ PIP_NO_INDEX)
     fi
 
-    if [ "$FAST_MODE" -eq 1 ]; then
-        echo "[info]     fast mode: enabled" >&2
-        pyperformance_args+=(--fast)
+    local benchmarks_filter
+    benchmarks_filter="$(build_benchmarks_filter)"
+    pyperformance_args+=("--benchmarks=$benchmarks_filter")
+
+    case "$MODE" in
+        single)
+            pyperformance_args+=(--debug-single-value)
+            ;;
+        fast)
+            pyperformance_args+=(--fast)
+            ;;
+        default)
+            ;;
+        rigorous)
+            pyperformance_args+=(--rigorous)
+            ;;
+    esac
+
+    if [ "$TIMEOUT" -ge 1 ]; then
+        pyperformance_args+=(--timeout)
+        pyperformance_args+=("$TIMEOUT")
     fi
 
-    if [ "$LOG_TO_FILE" -eq 1 ]; then
-        pyperformance "${pyperformance_args[@]}" \
-            > "$log_file" 2>&1
-    else
+    echo "[info]     using the following args: ${pyperformance_args[@]}" >&2
+
+    if [ "$ONLY_PRINT_ARGS" -eq 0 ]; then
         pyperformance "${pyperformance_args[@]}"
     fi
 }
 
-rm -f "$BASELINE_OUTPUT_FILE"
-rm -f "$PATCHED_OUTPUT_FILE"
+source "$STABLE_PYTHON_ENV_ACTIVATE"
 
-if [ "$LOG_TO_FILE" -eq 1 ]; then
-    rm -f "$BASELINE_LOG_FILE"
-    rm -f "$PATCHED_LOG_FILE"
-fi
+run_pyperformance "baseline" "$BASELINE_PYTHON_BIN" "$BASELINE_OUTPUT"
+run_pyperformance "patched" "$PATCHED_PYTHON_BIN" "$PATCHED_OUTPUT"
 
-# Run benchmark
-run_pyperformance "baseline" "$BASELINE_PYTHON_BIN" "$BASELINE_OUTPUT_FILE" "$BASELINE_LOG_FILE"
-run_pyperformance "patched" "$PATCHED_PYTHON_BIN" "$PATCHED_OUTPUT_FILE" "$PATCHED_LOG_FILE"
+pyperformance compare "$BASELINE_OUTPUT" "$PATCHED_OUTPUT" --output_style table \
+    | awk '!/^\+-+(\+-+)+\+$/' \
+    > "$COMPARE_OUTPUT"
+cat "$COMPARE_OUTPUT"
+python "$SCRIPT_DIR/plot.py" "$COMPARE_OUTPUT" "$PLOT_OUTPUT_PATH"
+
+deactivate
