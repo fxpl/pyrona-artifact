@@ -57,32 +57,34 @@ cat <<'EOF'
 Usage: run.sh [options]
 
 Options:
---mode <single|fast|default|rigorous>    Benchmark mode (default: default)
---timeout <number>                       Timeout in seconds (default: 180)
---benchmarks <LIST>                      Comma-separated benchmark selectors
-                                         NOTE: `fastapi` is disabled by default since it
-                                         is not compatible with our baseline CPython
---list                                   List pyperformance benchmarks and exits
--h, --help                               Show this help message
---build-env                              Pre-downloads benchmarks to allow offline execution
---online                                 Allows pyperformance to download benchmarks
-                                                                                 (Off by default for the artifact)
---check-env                              Checks the status of virtual environments
---only-print-args                        Print pyperformance args instead of running it
---cleanup-results                        Remove generated benchmark results before exiting
+--mode <single|fast|default|rigorous>   Benchmark mode (default: default)
+--timeout <number>                      Timeout in seconds (default: 180)
+--benchmarks <LIST>                     Comma-separated benchmark selectors
+                                        NOTE: `fastapi` is disabled by default since it
+                                           is not compatible with our baseline CPython
+                                        NOTE: `2to3` requires some external C libraries
+--list                                  List pyperformance benchmarks and exits
+-h, --help                              Show this help message
+--build-env                             Pre-downloads benchmarks to allow offline execution
+--online                                Allows pyperformance to download benchmarks
+                                        (Off by default for the artifact)
+--check-env                             Checks the status of virtual environments
+--only-print-args                       Print pyperformance args instead of running it
+--cleanup-results                       Remove generated benchmark results before exiting
 EOF
 }
 
 build_benchmarks_filter() {
     local final_filter="$BENCHMARKS_LIST"
 
-    # Always exclude fastapi because it is incompatible with Python 3.15.
-    local default_excludes="-fastapi"
+    # Always exclude:
+    #   fastapi because it is incompatible with Python 3.15.
+    #   2to3 because it requires some external C libraries
+    local default_excludes="-fastapi,-2to3"
 
     if [ "$(uname -s)" = "Darwin" ]; then
         # Exclude dask as it requires additional permissions on MacOS
-        # Exclude 2to3 (Honestly no idea why it fails)
-        default_excludes="$default_excludes,-2to3,-dask"
+        default_excludes="$default_excludes,-dask"
     fi
 
     if [ -n "$final_filter" ]; then

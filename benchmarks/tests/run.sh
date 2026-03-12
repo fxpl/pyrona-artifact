@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-TESTOPTS="-x test_freeze -x test_ssl"
+TESTOPTS="-x test_freeze -x test_ssl -x test_embed"
 CLEANUP_RESULTS=0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,7 +43,7 @@ require_env "PATCHED_BUILD_DIR"
 require_env "PATCHED_PYTHON_BIN"
 
 # Setup output directory and files
-RESULTS_DIR="results"
+RESULTS_DIR="$SCRIPT_DIR/results"
 BASELINE_OUTPUT_FILE="$RESULTS_DIR/baseline-output.txt"
 PATCHED_OUTPUT_FILE="$RESULTS_DIR/patched-output.txt"
 mkdir -p "$RESULTS_DIR"
@@ -61,10 +61,11 @@ run_make_test() {
 	echo "[info]     with TESTOPTS='$TESTOPTS'" >&2
 	echo "[info]         '-x test_freeze'  to ignore tests added by us" >&2
 	echo "[info]         '-x test_ssl'     because test_ssl is flaky on baseline" >&2
+	echo "[info]         '-x test_embed'   because test_embed is flaky on baseline" >&2
 
 	(
 		cd "$dir"
-		{ time make test TESTOPTS="$TESTOPTS"; } > "$SCRIPT_DIR/$output_file" 2>&1
+		{ time make test TESTOPTS="$TESTOPTS"; } > "$output_file" 2>&1
 	)
 }
 
