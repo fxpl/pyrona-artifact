@@ -40,7 +40,7 @@ you use the pre-built image like this:
 
     ```bash
     unzip -p docker/pyrona-artifact-linux-amd64.docker.zip | docker load
-    unzip -p docker/pyrona-artifact-linux-arm.docker.zip | docker load
+    unzip -p docker/pyrona-artifact-linux-arm64.docker.zip | docker load
     ```
 
 3. Confirm that the docker image has been loaded:
@@ -52,7 +52,7 @@ you use the pre-built image like this:
 4. Start the docker image:
 
     ```bash
-    docker run --rm --port 8501:8501 --memory=12g --cpus=8 pyrona-artifact:latest
+    docker run --rm -p 8501:8501 --memory=12g --cpus=8 pyrona-artifact:immutability
     ```
 
     Make sure that docker has enough memory and cores allocated to it. On linux
@@ -63,6 +63,14 @@ you use the pre-built image like this:
     more resources.
 
 5. When you open <http://localhost:8501/> you should see a web application.
+
+6. While the container is running, you can connect to the container to run
+    commands and inspect the file system. For this, first fetch the container
+    by ID running `docker ps` in a new terminal on your host, and then:
+
+    ```bash
+    docker exec -it <container-id> /bin/bash
+    ```
 
 ### Manually Building the Docker Image
 
@@ -123,6 +131,15 @@ If you want to look at the benchmarks or implementation you can start
 by looking at [`./GUIDE.md`](./GUIDE.md) it contains links to the implementation
 and benchmarks.
 
+## Clean-up
+
+Once you're done, you can remove the docker image using the following
+command in the host terminal:
+
+```bash
+docker rmi pyrona-artifact:immutability
+```
+
 ## Troubleshooting
 
 1. **"Permission denied" when running Docker commands:**
@@ -150,13 +167,13 @@ and benchmarks.
 
     Assuming you use colima, you can start it with the following command:
 
-    ```
+    ```bash
     colima start
     ```
 
     And then check the status via:
 
-    ```
+    ```bash
     colima status
     docker info
     ```
@@ -178,7 +195,7 @@ and benchmarks.
 
     ```
     colima stop
-    colima start --memory 12 --cpu 6 --disk 100
+    colima start --memory 12 --cpu 8 --disk 100
     ```
 
 ## License

@@ -24,6 +24,7 @@ permissions:
 
 env:
   IMAGE_NAME: pyrona-artifact
+  IMAGE_VERSION: immutability
   CPYTHON_MAKE_JOBS: 4
 
 jobs:
@@ -63,7 +64,7 @@ jobs:
 
           archive_name="${IMAGE_NAME}-${{ matrix.archive_suffix }}.docker.zip"
           tar_path="${RUNNER_TEMP}/${IMAGE_NAME}-${{ matrix.archive_suffix }}.docker.tar"
-          image_tag="${IMAGE_NAME}:${version}-${{ matrix.archive_suffix }}"
+          image_tag="${IMAGE_NAME}:${IMAGE_VERSION}"
 
           {
             echo "version=$version"
