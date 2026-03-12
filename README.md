@@ -36,39 +36,33 @@ you use the pre-built image like this:
 
 1. Ensure Docker is installed (<https://www.docker.com/get-started>).
     We have tested the artifact with Docker version 28.2.2.
-2. Make sure that docker has enough memory and cores allocated to it.
-   
-   How this is done depends on your setup. If you're using docker desktop
-   you can open "Docker Desktop -> Settings -> Resources" and allocate
-   more resources.
-
-   Alternately you can also continue and see if the current resource
-   allocation is sufficient.
-
-3. Select and unzip the docker image for your platform like this:
+2. Select and unzip the docker image for your platform like this:
 
     ```bash
     unzip -p docker/pyrona-artifact-linux-amd64.docker.zip | docker load
     unzip -p docker/pyrona-artifact-linux-arm.docker.zip | docker load
     ```
 
-4. Confirm that the docker image has been loaded:
+3. Confirm that the docker image has been loaded:
 
     ```bash
     docker images
     ```
 
-5. Start the docker image:
+4. Start the docker image:
 
     ```bash
     docker run --rm --port 8501:8501 --memory=12g --cpus=8 pyrona-artifact:latest
     ```
 
-    You can adjust the allocated resources by changing the `--memory` and
-    `--cpus` arguments in the command above. Note that the sub-interpreter
-    benchmark will require multiple cores, the more the better.
+    Make sure that docker has enough memory and cores allocated to it. On linux
+    you can use the `--memory` and `--cpus` arguments in the command above.
 
-6. When you open <http://localhost:8501/> you should see a web application.
+    These flags don't work on Windows and MacOS. If you're using docker desktop
+    you can open "Docker Desktop -> Settings -> Resources" and allocate
+    more resources.
+
+5. When you open <http://localhost:8501/> you should see a web application.
 
 ### Manually Building the Docker Image
 
@@ -84,7 +78,7 @@ Now resume from step 3 in the section above.
 
 ### Run the Artifact Locally (Without Docker)
 
-You can check the ["Dockerfile"](./Dockerfile) to see the full
+You can check the [`Dockerfile`](./Dockerfile) to see the full
 setup and required linux packages. If all dependencies are installed
 you should be able to initialise everything with this short script:
 (take from the docker file)

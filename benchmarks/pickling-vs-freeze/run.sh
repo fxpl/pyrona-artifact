@@ -79,19 +79,39 @@ trap on_exit EXIT
 
 mkdir -p "$RESULTS_DIR"
 
+pickle_cmd=(
+	"$BASELINE_PYTHON_BIN"
+	"$SCRIPT_DIR/microbenchmark.py"
+	--collect
+	pickle
+)
+if [ "${#SIZE_ARGS[@]}" -gt 0 ]; then
+	pickle_cmd+=("${SIZE_ARGS[@]}")
+fi
+if [ "${#TRIAL_ARGS[@]}" -gt 0 ]; then
+	pickle_cmd+=("${TRIAL_ARGS[@]}")
+fi
+pickle_cmd+=(--output "$PICKLE_RESULTS")
+
 echo "Collecting pickle timings with baseline Python: $BASELINE_PYTHON_BIN"
-"$BASELINE_PYTHON_BIN" "$SCRIPT_DIR/microbenchmark.py" \
-	--collect pickle \
-	"${SIZE_ARGS[@]}" \
-	"${TRIAL_ARGS[@]}" \
-	--output "$PICKLE_RESULTS"
+"${pickle_cmd[@]}"
+
+freeze_cmd=(
+	"$PATCHED_PYTHON_BIN"
+	"$SCRIPT_DIR/microbenchmark.py"
+	--collect
+	freeze
+)
+if [ "${#SIZE_ARGS[@]}" -gt 0 ]; then
+	freeze_cmd+=("${SIZE_ARGS[@]}")
+fi
+if [ "${#TRIAL_ARGS[@]}" -gt 0 ]; then
+	freeze_cmd+=("${TRIAL_ARGS[@]}")
+fi
+freeze_cmd+=(--output "$FREEZE_RESULTS")
 
 echo "Collecting freeze timings with patched Python: $PATCHED_PYTHON_BIN"
-"$PATCHED_PYTHON_BIN" "$SCRIPT_DIR/microbenchmark.py" \
-	--collect freeze \
-	"${SIZE_ARGS[@]}" \
-	"${TRIAL_ARGS[@]}" \
-	--output "$FREEZE_RESULTS"
+"${freeze_cmd[@]}"
 
 echo "Comparing freeze vs pickle results"
 "$BASELINE_PYTHON_BIN" "$SCRIPT_DIR/compare.py" \

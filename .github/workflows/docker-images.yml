@@ -154,6 +154,14 @@ jobs:
             zip -r -1 "$upload_dir/pyrona-artifact.zip" pyrona-artifact
           )
 
+      - name: Upload Zenodo package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zenodo-package
+          path: ${{ runner.temp }}/zenodo-upload/pyrona-artifact.zip
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Resolve Zenodo configuration
         id: zenodo
         shell: bash
