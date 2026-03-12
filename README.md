@@ -14,14 +14,14 @@ and implementation details that are part of this artifact.
 
 This artifact is packaged using Docker to ensure reproducibility across different systems.
 We recommend using a machine with:
-- 20+ GB of free disk space to accommodate the Docker image and the datasets.
+- 25+ GB of free disk space to accommodate the Docker image and the datasets.
 - 12+ GB of RAM allocated to Docker.
 - 8+ CPU cores allocated to Docker.
 - A web browser to access the interactive application.
 - Internet access, if you want to build the docker container or from scratch
     or run the artifact locally on your machine
 
-We have tested the artifact on an x86_64 Linux (Ubuntu 24.04.3) and ARM MacOS (Tahoe 26.3.1).
+We have tested the artifact on an amd64 Linux (Ubuntu 24.04.3) and ARM MacOS (Tahoe 26.3.1).
 
 ## Working with this Artifact
 

@@ -64,19 +64,6 @@ RESULTS_DIR="results"
 FREEZE_RESULTS="$RESULTS_DIR/freeze.json"
 PICKLE_RESULTS="$RESULTS_DIR/pickle.json"
 
-cleanup_results() {
-	if [ "$CLEANUP_RESULTS" -eq 1 ]; then
-		rm -rf "$RESULTS_DIR"
-	fi
-}
-
-on_exit() {
-	[ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
-	cleanup_results
-}
-
-trap on_exit EXIT
-
 mkdir -p "$RESULTS_DIR"
 
 pickle_cmd=(
@@ -117,3 +104,7 @@ echo "Comparing freeze vs pickle results"
 "$BASELINE_PYTHON_BIN" "$SCRIPT_DIR/compare.py" \
 	--freeze "$FREEZE_RESULTS" \
 	--pickle "$PICKLE_RESULTS"
+
+if [ "$CLEANUP_RESULTS" -eq 1 ]; then
+	rm -rf "$RESULTS_DIR"
+fi

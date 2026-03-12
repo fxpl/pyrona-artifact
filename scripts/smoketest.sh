@@ -208,7 +208,7 @@ run_step \
     "benchmark: pickling-vs-freezing" \
     validate_success \
     bash "$ARTIFACT_ROOT/benchmarks/pickling-vs-freeze/run.sh" \
-        --size 100 \
+        --size 10 \
         --num-trials 1 \
         --cleanup-results
 

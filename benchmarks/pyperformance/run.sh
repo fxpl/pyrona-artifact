@@ -17,16 +17,11 @@ ONLY_PRINT_ARGS=0
 CLEANUP_RESULTS=0
 
 PYPERF_RUN_DIR="$REPO_ROOT/build/pyperf"
-BASELINE_OUTPUT="$SCRIPT_DIR/results/baseline.json"
-PATCHED_OUTPUT="$SCRIPT_DIR/results/patched.json"
-COMPARE_OUTPUT="$SCRIPT_DIR/results/compare.txt"
-PLOT_OUTPUT_PATH="$SCRIPT_DIR/results/results.pdf"
-
-cleanup_results() {
-    if [ "$CLEANUP_RESULTS" -eq 1 ]; then
-        rm -rf "$SCRIPT_DIR/results"
-    fi
-}
+RESULTS_DIR="$SCRIPT_DIR/results"
+BASELINE_OUTPUT="$RESULTS_DIR/baseline.json"
+PATCHED_OUTPUT="$RESULTS_DIR/patched.json"
+COMPARE_OUTPUT="$RESULTS_DIR/compare.txt"
+PLOT_OUTPUT_PATH="$RESULTS_DIR/results.pdf"
 
 die() {
     echo "error: $*" >&2
@@ -167,17 +162,10 @@ while [ "$#" -gt 0 ]; do
 done
 
 mkdir -p "$PYPERF_RUN_DIR"
+mkdir -p "$RESULTS_DIR"
 
 ORIGINAL_DIR="$(pwd)"
 cd "$PYPERF_RUN_DIR"
-
-on_exit() {
-    [ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
-    cd "$ORIGINAL_DIR"
-    cleanup_results
-}
-
-trap on_exit EXIT
 
 if [ "$LIST_ONLY" -eq 1 ]; then
     source "$STABLE_PYTHON_ENV_ACTIVATE"
@@ -270,3 +258,7 @@ cat "$COMPARE_OUTPUT"
 python "$SCRIPT_DIR/plot.py" "$COMPARE_OUTPUT" "$PLOT_OUTPUT_PATH"
 
 deactivate
+
+if [ "$CLEANUP_RESULTS" -eq 1 ]; then
+	rm -rf "$RESULTS_DIR"
+fi

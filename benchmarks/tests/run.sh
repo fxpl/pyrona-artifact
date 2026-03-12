@@ -21,17 +21,6 @@ die() {
 	exit 1
 }
 
-cleanup_results() {
-	if [ "$CLEANUP_RESULTS" -eq 1 ]; then
-		rm -rf "$RESULTS_DIR"
-	fi
-}
-
-on_exit() {
-	[ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
-	cleanup_results
-}
-
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--cleanup-results)
@@ -57,7 +46,6 @@ require_env "PATCHED_PYTHON_BIN"
 RESULTS_DIR="results"
 BASELINE_OUTPUT_FILE="$RESULTS_DIR/baseline-output.txt"
 PATCHED_OUTPUT_FILE="$RESULTS_DIR/patched-output.txt"
-trap on_exit EXIT
 mkdir -p "$RESULTS_DIR"
 
 run_make_test() {
@@ -87,3 +75,6 @@ python3 "$SCRIPT_DIR/compare.py" \
 	--baseline "$BASELINE_OUTPUT_FILE" \
 	--patched "$PATCHED_OUTPUT_FILE"
 
+if [ "$CLEANUP_RESULTS" -eq 1 ]; then
+	rm -rf "$RESULTS_DIR"
+fi

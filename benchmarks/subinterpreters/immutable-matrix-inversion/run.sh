@@ -9,8 +9,9 @@ WORKERS_MAX=16
 VALUES_PER_WORKER=200000
 NUM_TRIALS=10
 BATCH_PER_WORKER=4
-OUTPUT_PATH="$SCRIPT_DIR/results/scaling.json"
-PLOT_OUTPUT_PATH="$SCRIPT_DIR/results/scaling_graph.png"
+RESULTS_DIR="$SCRIPT_DIR/results"
+OUTPUT_PATH="$RESULTS_DIR/scaling.json"
+PLOT_OUTPUT_PATH="$RESULTS_DIR/scaling_graph.png"
 CLEANUP_RESULTS=0
 
 die() {
@@ -32,17 +33,6 @@ require_cmd() {
 require_executable() {
     local bin_path="$1"
     [ -x "$bin_path" ] || die "python executable not found or not executable: $bin_path"
-}
-
-cleanup_results() {
-    if [ "$CLEANUP_RESULTS" -eq 1 ]; then
-        rm -rf "$SCRIPT_DIR/results"
-    fi
-}
-
-on_exit() {
-    [ "${BASH_SUBSHELL:-0}" -eq 0 ] || return
-    cleanup_results
 }
 
 usage() {
@@ -100,8 +90,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-trap on_exit EXIT
-
+mkdir -p "$RESULTS_DIR"
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 mkdir -p "$(dirname "$PLOT_OUTPUT_PATH")"
 
@@ -186,3 +175,7 @@ echo "[info] generating plot" >&2
 python "$SCRIPT_DIR/plot.py" --input "$OUTPUT_PATH" --output "$PLOT_OUTPUT_PATH"
 echo "[done] wrote plot: $PLOT_OUTPUT_PATH" >&2
 deactivate
+
+if [ "$CLEANUP_RESULTS" -eq 1 ]; then
+	rm -rf "$RESULTS_DIR"
+fi
