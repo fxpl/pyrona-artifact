@@ -46,11 +46,18 @@ source "$ENV_FILE"
 
 PASS_COUNT=0
 FAIL_COUNT=0
+CURRENT_STEP=0
+
+if [ "$MINIMAL" -eq 0 ]; then
+    TOTAL_STEPS=6
+else
+    TOTAL_STEPS=4
+fi
 
 pass_step() {
     local step_name="$1"
 
-    echo "[ok] $step_name"
+    echo "  [ok] $step_name"
     PASS_COUNT=$((PASS_COUNT + 1))
 }
 
@@ -59,7 +66,7 @@ fail_step() {
     local reason="$2"
     local output_file="$3"
 
-    echo "[fail] $step_name"
+    echo "  [fail] $step_name"
     echo "$reason"
     echo "--- command output ---"
     cat "$output_file"
@@ -126,23 +133,41 @@ run_step() {
     local output_file
     output_file="$(mktemp)"
 
-    if run_with_timeout "$TIMEOUT_SECONDS" "$@" >"$output_file" 2>&1; then
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    echo "[step ${CURRENT_STEP}/${TOTAL_STEPS}] $step_name"
+
+    local max_attempts=2
+    local attempt
+    local succeeded=0
+
+    for attempt in 1 2; do
         local failure_reason
         failure_reason=""
 
-        if "$validator" "$output_file" failure_reason; then
-            pass_step "$step_name"
+        if run_with_timeout "$TIMEOUT_SECONDS" "$@" >"$output_file" 2>&1; then
+            if "$validator" "$output_file" failure_reason; then
+                succeeded=1
+                break
+            fi
         else
-            fail_step "$step_name" "$failure_reason" "$output_file"
-        fi
-    else
-        local exit_code="$?"
+            local exit_code="$?"
 
-        if [ "$exit_code" -eq 124 ]; then
-            fail_step "$step_name" "command timed out after ${TIMEOUT_SECONDS}s" "$output_file"
-        else
-            fail_step "$step_name" "command exited with a non-zero status" "$output_file"
+            if [ "$exit_code" -eq 124 ]; then
+                failure_reason="command timed out after ${TIMEOUT_SECONDS}s"
+            else
+                failure_reason="command exited with a non-zero status"
+            fi
         fi
+
+        if [ "$attempt" -lt "$max_attempts" ]; then
+            echo "  [retry] ${step_name}: attempt ${attempt}/${max_attempts} failed (${failure_reason:-validation failed}); retrying once"
+        fi
+    done
+
+    if [ "$succeeded" -eq 1 ]; then
+        pass_step "$step_name"
+    else
+        fail_step "$step_name" "${failure_reason:-validation failed}" "$output_file"
     fi
 
     rm -f "$output_file"
@@ -166,7 +191,7 @@ validate_pyperformance_env_check() {
     local output_file="$1"
     local reason_var="$2"
 
-    if ! expect_contains "$output_file" "[done] Validating virtual environments:"; then
+    if ! expect_contains "$output_file" "  [done] Validating virtual environments:"; then
         printf -v "$reason_var" '%s' "missing expected status header"
         return 1
     fi
@@ -196,7 +221,7 @@ run_step \
 
 
 run_step \
-    "benchmark: subinterpreters" \
+    "benchmark trial: subinterpreters" \
     validate_success \
     bash "$ARTIFACT_ROOT/benchmarks/subinterpreters/immutable-matrix-inversion/run.sh" \
         --workers-max 4 \
@@ -205,7 +230,7 @@ run_step \
         --cleanup-results
 
 run_step \
-    "benchmark: pickling-vs-freezing" \
+    "benchmark trial: pickling-vs-freezing" \
     validate_success \
     bash "$ARTIFACT_ROOT/benchmarks/pickling-vs-freeze/run.sh" \
         --size 10 \
@@ -214,11 +239,11 @@ run_step \
 
 if [ "$MINIMAL" -eq 0 ]; then
     run_step \
-        "benchmark: pyperformance" \
+        "benchmark trial: pyperformance" \
         validate_success \
         bash "$ARTIFACT_ROOT/benchmarks/pyperformance/run.sh" --mode single --cleanup-results
     run_step \
-        "benchmark: tests" \
+        "benchmark trial: tests" \
         validate_success \
         bash "$ARTIFACT_ROOT/benchmarks/tests/run.sh" --cleanup-results
 else

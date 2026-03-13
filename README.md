@@ -1,5 +1,19 @@
 # Artefact: "Dynamically Checked Deep Immutability in Python"
 
+Our paper is a design paper, describing how deep immutability can
+be added to Python using dynamic checks. The design aims to be
+backwards compatible and allow sharing of immutable objects across
+sub-interpreters. The paper describes several problems and presents
+our solutions.
+
+In this artifact we want to show our working implementation of the
+proposed design. We claim that this implementation is:
+- functional: We provide a working Python interpreter that implements deep immutability.
+- reusable: Our patched version of CPython can be reused, as a baseline for further
+    research exploring the design space. We also include a snapshot of our modified
+    CPython version. This can be used as a reference how the described freezing
+    algorithm can be implemented.
+
 ## Artifact Information
 
 This artifact holds a snapshot of CPython and a patched CPython

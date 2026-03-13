@@ -11,6 +11,18 @@ st.title("Artifact Overview")
 
 st.markdown(\
 """
+
+Our paper is a design paper, describing how deep immutability can
+be added to Python using dynamic checks. The design aims to be
+backwards compatible and allow sharing of immutable objects across
+sub-interpreters. The paper describes several problems and presents
+our solutions.
+
+In this artifact we want to show our working implementation of the
+proposed design.
+
+## This website
+
 This website provides a simple interface to interact with our modified
 version of Python and to recreate parts of the paper. All bash commands
 and Python scripts shown here can also be executed manually in the Docker

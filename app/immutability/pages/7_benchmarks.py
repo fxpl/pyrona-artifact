@@ -25,9 +25,10 @@ For the paper we used a Ubuntu 22.04.5 LTS machine with 32-Cores and
 256 GB ram.
 """)
 
-with st.expander("Detailed CPU Specification", expanded=True):
+with st.expander("Detailed CPU Specification", expanded=False):
     st.markdown(\
 """
+```
 Vendor ID:                AuthenticAMD
   Model name:             AMD Ryzen Threadripper 3970X 32-Core Processor
     CPU family:           23
@@ -54,12 +55,13 @@ Caches (sum of all):
   L1i:                    1 MiB (32 instances)
   L2:                     16 MiB (32 instances)
   L3:                     128 MiB (8 instances)
+```
 """)
 
 
 st.markdown(\
 """
-Almost all of these scripts are configurable. Try the help command to
+Almost all of these scripts are configurable. Try the `--help` argument to
 see all possible options.
 """)
 
