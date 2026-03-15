@@ -111,5 +111,4 @@ the website will stop any running commands.
 This website doesn't support standard input for scripts. If you
 need this, you can always run the commands and Python scripts manually
 in the Docker container.
-"""
-)
+""")

@@ -191,7 +191,7 @@ validate_pyperformance_env_check() {
     local output_file="$1"
     local reason_var="$2"
 
-    if ! expect_contains "$output_file" "  [done] Validating virtual environments:"; then
+    if ! expect_contains "$output_file" "[done] Validating virtual environments:"; then
         printf -v "$reason_var" '%s' "missing expected status header"
         return 1
     fi

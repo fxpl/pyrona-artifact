@@ -128,6 +128,10 @@ This benchmark uses sub-interpreters to invert 4x4 matrices.
 The graph shows the comparison of using pickling vs freezing
 as a sharing mechanism.
 
+Note: This figure requires 16+ cores to properly reproduce.
+We found that the benefit of direct sharing is only really
+noticeable after 8 (performance) cores.
+
 The execution may take up to 10 minutes.
 """)
 util.editable_bash_block("""benchmarks/subinterpreters/immutable-matrix-inversion/run.sh""", "bench-direct-sharing", output_lines=25)
