@@ -87,7 +87,7 @@ in the docker container and can be inspected.
 """)
 
 util.editable_bash_block(
-    """bash benchmarks/pyperformance/run.sh --mode fast""",
+    """benchmarks/pyperformance/run.sh --mode fast""",
     "bench-pyperf",
     output_lines=30,
     on_finished=util.make_pdf_display_callback(
@@ -134,4 +134,11 @@ noticeable after 8 (performance) cores.
 
 The execution may take up to 10 minutes.
 """)
-util.editable_bash_block("""benchmarks/subinterpreters/immutable-matrix-inversion/run.sh""", "bench-direct-sharing", output_lines=25)
+util.editable_bash_block(
+    """benchmarks/subinterpreters/immutable-matrix-inversion/run.sh""",
+    "bench-direct-sharing",
+    output_lines=25,
+    on_finished=util.make_pdf_display_callback(
+        "benchmarks/subinterpreters/immutable-matrix-inversion/results/scaling_graph.pdf",
+    ),
+)

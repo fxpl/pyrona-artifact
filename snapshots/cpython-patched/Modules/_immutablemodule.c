@@ -55,47 +55,24 @@ immutable_free(void *module)
 }
 
 /*[clinic input]
-_immutable.register_freezable
-    obj: object
-    /
-
-Register a type as freezable.
-[clinic start generated code]*/
-
-static PyObject *
-_immutable_register_freezable(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=7a68ab35ee36a572 input=48ad5294977fe780]*/
-{
-    if(!PyType_Check(obj)){
-        PyErr_SetString(PyExc_TypeError, "Expected a type");
-        return NULL;
-    }
-
-    if(_PyImmutability_RegisterFreezable((PyTypeObject *)obj) < 0){
-        return NULL;
-    }
-
-    Py_RETURN_NONE;
-}
-
-/*[clinic input]
 _immutable.freeze
-    *args: object
+    *args: array
 
 Freeze one or more objects and their graphs.
 [clinic start generated code]*/
 
 static PyObject *
-_immutable_freeze(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
-/*[clinic end generated code: output=3f4aa421661b0e42 input=ace5010dba36e8b1]*/
+_immutable_freeze_impl(PyObject *module, PyObject * const *args,
+                       Py_ssize_t args_length)
+/*[clinic end generated code: output=7be8a1c8b3aed004 input=6f071d066cb91bc8]*/
 {
-    if (nargs == 0) {
+    if (args_length == 0) {
         PyErr_SetString(PyExc_TypeError,
                         "freeze() requires at least one argument");
         return NULL;
     }
 
-    if (_PyImmutability_FreezeMany(args, nargs) < 0) {
+    if (_PyImmutability_FreezeMany(args, args_length) < 0) {
         return NULL;
     }
 
@@ -103,7 +80,7 @@ _immutable_freeze(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 }
 
 /*[clinic input]
-_immutable.isfrozen
+_immutable.is_frozen
     obj: object
     /
 
@@ -114,8 +91,8 @@ side effect and True is returned.
 [clinic start generated code]*/
 
 static PyObject *
-_immutable_isfrozen(PyObject *module, PyObject *obj)
-/*[clinic end generated code: output=5857a038e2a68ed7 input=f60302e01ab45c4d]*/
+_immutable_is_frozen(PyObject *module, PyObject *obj)
+/*[clinic end generated code: output=880efe7d38b137b5 input=97c61fe65ccb1574]*/
 {
     int result = _PyImmutability_CanViewAsImmutable(obj);
     if (result < 0) {
@@ -138,13 +115,14 @@ Set the freezable status of an object.
 Status values:
   FREEZABLE_YES (0): always freezable
   FREEZABLE_NO (1): never freezable
-  FREEZABLE_EXPLICIT (2): freezable only when freeze() is called directly on it
+  FREEZABLE_EXPLICIT (2): freezable only when freeze() is
+                          called directly on it
   FREEZABLE_PROXY (3): reserved for future use
 [clinic start generated code]*/
 
 static PyObject *
 _immutable_set_freezable_impl(PyObject *module, PyObject *obj, int status)
-/*[clinic end generated code: output=73cad0b4df9a46f9 input=63df024c940ba301]*/
+/*[clinic end generated code: output=73cad0b4df9a46f9 input=6528458c547e93a8]*/
 {
     if (_PyImmutability_SetFreezable(obj, status) < 0) {
         return NULL;
@@ -177,9 +155,8 @@ PyDoc_STRVAR(immutable_module_doc,
 "making them immutable at runtime.");
 
 static struct PyMethodDef immutable_methods[] = {
-    _IMMUTABLE_REGISTER_FREEZABLE_METHODDEF
     _IMMUTABLE_FREEZE_METHODDEF
-    _IMMUTABLE_ISFROZEN_METHODDEF
+    _IMMUTABLE_IS_FROZEN_METHODDEF
     _IMMUTABLE_SET_FREEZABLE_METHODDEF
     { NULL, NULL }
 };
@@ -207,10 +184,6 @@ immutable_exec(PyObject *module) {
     }
 
     if (PyModule_AddType(module, (PyTypeObject *)module_state->not_freezable_error_obj) != 0) {
-        return -1;
-    }
-
-    if (PyModule_AddType(module, &_PyNotFreezable_Type) != 0) {
         return -1;
     }
 

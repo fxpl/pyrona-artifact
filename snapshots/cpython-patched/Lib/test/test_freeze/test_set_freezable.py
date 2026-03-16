@@ -2,16 +2,16 @@ import gc
 import unittest
 import weakref
 from immutable import (
-    freeze, isfrozen, register_freezable, set_freezable,
+    freeze, is_frozen, set_freezable,
     FREEZABLE_YES, FREEZABLE_NO, FREEZABLE_EXPLICIT, FREEZABLE_PROXY,
 )
 
 
 def make_freezable_class():
-    """Create a fresh class registered as freezable."""
+    """Create a fresh class marked as freezable."""
     class C:
         pass
-    register_freezable(C)
+    set_freezable(C, FREEZABLE_YES)
     return C
 
 
@@ -23,7 +23,7 @@ class TestSetFreezableYes(unittest.TestCase):
         obj = C()
         set_freezable(obj, FREEZABLE_YES)
         freeze(obj)
-        self.assertTrue(isfrozen(obj))
+        self.assertTrue(is_frozen(obj))
 
     def test_freeze_as_child_succeeds(self):
         C = make_freezable_class()
@@ -32,7 +32,7 @@ class TestSetFreezableYes(unittest.TestCase):
         parent.child = child
         set_freezable(child, FREEZABLE_YES)
         freeze(parent)
-        self.assertTrue(isfrozen(child))
+        self.assertTrue(is_frozen(child))
 
 
 class TestSetFreezableNo(unittest.TestCase):
@@ -44,7 +44,7 @@ class TestSetFreezableNo(unittest.TestCase):
         set_freezable(obj, FREEZABLE_NO)
         with self.assertRaises(TypeError):
             freeze(obj)
-        self.assertFalse(isfrozen(obj))
+        self.assertFalse(is_frozen(obj))
 
     def test_freeze_as_child_raises(self):
         C = make_freezable_class()
@@ -54,8 +54,8 @@ class TestSetFreezableNo(unittest.TestCase):
         set_freezable(child, FREEZABLE_NO)
         with self.assertRaises(TypeError):
             freeze(parent)
-        self.assertFalse(isfrozen(child))
-        self.assertFalse(isfrozen(parent))
+        self.assertFalse(is_frozen(child))
+        self.assertFalse(is_frozen(parent))
 
 
 class TestSetFreezableExplicit(unittest.TestCase):
@@ -66,7 +66,7 @@ class TestSetFreezableExplicit(unittest.TestCase):
         obj = C()
         set_freezable(obj, FREEZABLE_EXPLICIT)
         freeze(obj)
-        self.assertTrue(isfrozen(obj))
+        self.assertTrue(is_frozen(obj))
 
     def test_child_freeze_raises(self):
         C = make_freezable_class()
@@ -76,7 +76,7 @@ class TestSetFreezableExplicit(unittest.TestCase):
         set_freezable(child, FREEZABLE_EXPLICIT)
         with self.assertRaises(TypeError):
             freeze(parent)
-        self.assertFalse(isfrozen(child))
+        self.assertFalse(is_frozen(child))
 
 
 class TestSetFreezableProxy(unittest.TestCase):
@@ -132,14 +132,14 @@ class TestSetFreezableEdgeCases(unittest.TestCase):
         # Override to YES
         set_freezable(obj, FREEZABLE_YES)
         freeze(obj)
-        self.assertTrue(isfrozen(obj))
+        self.assertTrue(is_frozen(obj))
 
     def test_unset_object_uses_default(self):
         # An object with no set_freezable should use existing freeze logic.
         C = make_freezable_class()
         obj = C()
         freeze(obj)
-        self.assertTrue(isfrozen(obj))
+        self.assertTrue(is_frozen(obj))
 
 
 class TestSetFreezableStorage(unittest.TestCase):
@@ -170,17 +170,17 @@ class TestSetFreezableStorage(unittest.TestCase):
         self.assertEqual(obj.__freezable__, FREEZABLE_YES)
 
     def test_ob_flags_fallback_for_slots_only(self):
-        # Objects with __slots__ but no __dict__ should fall back
-        # to ob_flags on 64-bit.
+        # Objects with __slots__ but no __dict__ use ob_flags for
+        # instance-level set_freezable on 64-bit.
         import sys
         if sys.maxsize <= 2**31:
             self.skipTest("ob_flags fallback not available on 32-bit")
         class S:
             __slots__ = ('__weakref__', 'x')
-        register_freezable(S)
         obj = S()
         set_freezable(obj, FREEZABLE_NO)
-        # No __freezable__ attribute should be set.
+        # No __freezable__ attribute should be set on the instance
+        # (it has no __dict__).
         self.assertFalse(hasattr(obj, '__freezable__'))
         # But the status should still be queryable during freeze.
         with self.assertRaises(TypeError):
@@ -214,7 +214,7 @@ class TestSetFreezableLifetime(unittest.TestCase):
         # set_freezable should not prevent collection.
         class S:
             __slots__ = ('__weakref__', 'x')
-        register_freezable(S)
+        set_freezable(S, FREEZABLE_YES)
         obj = S()
         ref = weakref.ref(obj)
         set_freezable(obj, FREEZABLE_NO)

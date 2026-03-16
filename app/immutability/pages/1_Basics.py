@@ -23,7 +23,7 @@ code blocks and experiment with the implementation.
 
 Our design adds an `immutable` module to Python. The two main functions for
 this page are:
-- `isfrozen(obj) -> bool`: Returns `True` if the object is immutable,
+- `is_frozen(obj) -> bool`: Returns `True` if the object is immutable,
     `False` otherwise
 - `freeze(obj, ...) -> obj`: Turns the given object immutable and returns
     the first argument.
@@ -33,18 +33,18 @@ this page are:
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen
+from immutable import freeze, is_frozen
 
 # This creates a new dictionary
 data = {"a": "A new dict"}
 
 # Dictionaries are mutable by default
-print(f"Is `data` immutable? {isfrozen(data)}")
+print(f"Is `data` immutable? {is_frozen(data)}")
 data["x"] = 42
 
 # This freezes the dictionary
 freeze(data)
-print(f"Is `data` immutable? {isfrozen(data)}")
+print(f"Is `data` immutable? {is_frozen(data)}")
 
 # Any attempts to modify the dictionary will fail. Try uncommenting this:
 # data["y"] = "A new value"
@@ -61,7 +61,7 @@ will also be frozen.
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen
+from immutable import freeze, is_frozen
 
 # This creates a simple dictionary containing another dictionary
 child = {}
@@ -71,8 +71,8 @@ data = {"child": child}
 freeze(data)
 
 # Check that both data and child are frozen
-print(f"Is `data` immutable? {isfrozen(data)}")
-print(f"Is `child` immutable? {isfrozen(child)}")
+print(f"Is `data` immutable? {is_frozen(data)}")
+print(f"Is `child` immutable? {is_frozen(child)}")
 
 # Any attempts to modify data or child will fail.
 # Try uncommenting these statements:

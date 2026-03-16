@@ -31,7 +31,7 @@ Take this example:
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen, set_freezable, FREEZABLE_NO
+from immutable import freeze, is_frozen, set_freezable, FREEZABLE_NO
 
 x = {}
 y = {}
@@ -41,7 +41,7 @@ set_freezable(y, FREEZABLE_NO)
 
 # Freezing x will succeed since it's freezable
 freeze(x)
-print(f"is x frozen? {isfrozen(x)}")
+print(f"is x frozen? {is_frozen(x)}")
 
 # Freezing y will fail since it's unfreezable
 try:
@@ -50,7 +50,7 @@ except TypeError as exc:
     print(f"freeze(y) failed: {type(exc).__name__}")
 
 # y is still mutable
-print(f"is y frozen? {isfrozen(y)}")
+print(f"is y frozen? {is_frozen(y)}")
 y["x"] = x
 """,
 "freezability-yes-no")
@@ -65,7 +65,7 @@ or fails and leaves all of them mutable.
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen, set_freezable, FREEZABLE_YES, FREEZABLE_NO
+from immutable import freeze, is_frozen, set_freezable, FREEZABLE_YES, FREEZABLE_NO
 
 x = {}
 y = {}
@@ -82,16 +82,16 @@ except TypeError as exc:
     print(f"freeze(items) failed: {type(exc).__name__}")
 
 # All objects should still be mutable:
-print(f"is items frozen? {isfrozen(items)}")
-print(f"is x frozen? {isfrozen(x)}")
-print(f"is y frozen? {isfrozen(y)}")
-print(f"is z frozen? {isfrozen(z)}")
+print(f"is items frozen? {is_frozen(items)}")
+print(f"is x frozen? {is_frozen(x)}")
+print(f"is y frozen? {is_frozen(y)}")
+print(f"is z frozen? {is_frozen(z)}")
 
 # Making y freezable will allow items to be frozen
 set_freezable(y, FREEZABLE_YES)
 
 freeze(items)
-print(f"is items frozen? {isfrozen(items)}")
+print(f"is items frozen? {is_frozen(items)}")
 """,
 "freezability-all-or-nothing")
 
@@ -110,7 +110,7 @@ Take this example:
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen, set_freezable, FREEZABLE_EXPLICIT
+from immutable import freeze, is_frozen, set_freezable, FREEZABLE_EXPLICIT
 
 x = {}
 y = {}
@@ -128,11 +128,11 @@ except TypeError as exc:
 
 # y is still mutable
 y["mutate"] = True
-print(f"is y frozen? {isfrozen(y)}")
+print(f"is y frozen? {is_frozen(y)}")
 
 # Freezing items and explicitly passing y will succeed
 freeze(items, y)
-print(f"is items frozen? {isfrozen(items)}")
-print(f"is y frozen? {isfrozen(y)}")
+print(f"is items frozen? {is_frozen(items)}")
+print(f"is y frozen? {is_frozen(y)}")
 """,
 "freezability-explicit")

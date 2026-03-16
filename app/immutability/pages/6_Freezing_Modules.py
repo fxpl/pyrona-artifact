@@ -17,6 +17,6 @@ TODO
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen
+from immutable import freeze, is_frozen
 """,
 "modules-1")

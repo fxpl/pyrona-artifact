@@ -1912,6 +1912,7 @@ static PyType_Slot deque_slots[] = {
     {Py_tp_getattro, PyObject_GenericGetAttr},
     {Py_tp_doc, (void *)deque_init__doc__},
     {Py_tp_traverse, deque_traverse},
+    {Py_tp_reachable, deque_traverse},
     {Py_tp_clear, deque_clear},
     {Py_tp_richcompare, deque_richcompare},
     {Py_tp_iter, deque_iter},
@@ -2119,6 +2120,7 @@ static PyType_Slot dequeiter_slots[] = {
     {Py_tp_dealloc, dequeiter_dealloc},
     {Py_tp_getattro, PyObject_GenericGetAttr},
     {Py_tp_traverse, dequeiter_traverse},
+    {Py_tp_reachable, dequeiter_traverse},
     {Py_tp_clear, dequeiter_clear},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, dequeiter_next},
@@ -2237,6 +2239,7 @@ static PyType_Slot dequereviter_slots[] = {
     {Py_tp_dealloc, dequeiter_dealloc},
     {Py_tp_getattro, PyObject_GenericGetAttr},
     {Py_tp_traverse, dequeiter_traverse},
+    {Py_tp_reachable, dequeiter_traverse},
     {Py_tp_clear, dequeiter_clear},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, dequereviter_next},
@@ -2546,6 +2549,7 @@ static PyType_Slot defdict_slots[] = {
     {Py_tp_getattro, PyObject_GenericGetAttr},
     {Py_tp_doc, (void *)defdict_doc},
     {Py_tp_traverse, defdict_traverse},
+    {Py_tp_reachable, defdict_traverse},
     {Py_tp_clear, defdict_tp_clear},
     {Py_tp_methods, defdict_methods},
     {Py_tp_members, defdict_members},
@@ -2818,6 +2822,7 @@ static PyType_Slot tuplegetter_slots[] = {
     {Py_tp_dealloc, tuplegetter_dealloc},
     {Py_tp_repr, tuplegetter_repr},
     {Py_tp_traverse, tuplegetter_traverse},
+    {Py_tp_reachable, tuplegetter_traverse},
     {Py_tp_clear, tuplegetter_clear},
     {Py_tp_methods, tuplegetter_methods},
     {Py_tp_members, tuplegetter_members},
@@ -2899,11 +2904,11 @@ collections_exec(PyObject *module) {
     ADD_TYPE(module, &dequereviter_spec, state->dequereviter_type, NULL);
     ADD_TYPE(module, &tuplegetter_spec, state->tuplegetter_type, NULL);
 
-    if(_PyImmutability_RegisterFreezable(state->deque_type) < 0){
+    if(_PyImmutability_SetFreezable((PyObject*)state->deque_type, _Py_FREEZABLE_YES) < 0){
         return -1;
     }
 
-    if(_PyImmutability_RegisterFreezable(state->defdict_type) < 0){
+    if(_PyImmutability_SetFreezable((PyObject*)state->defdict_type, _Py_FREEZABLE_YES) < 0){
         return -1;
     }
 

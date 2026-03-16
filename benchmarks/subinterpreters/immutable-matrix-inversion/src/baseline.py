@@ -30,12 +30,12 @@ if __name__ == "__main__":
     values = [random_matrix(-2, 2) for _ in range(args.num_values)]
 
     if args.freeze:
-        from immutable import freeze, isfrozen
+        from immutable import freeze, is_frozen
         freeze(Matrix)
         for m in values:
             freeze(m)
 
-        assert isfrozen(values[0])
+        assert is_frozen(values[0])
 
     durations = []
     for i in range(args.num_trials):

@@ -7,7 +7,9 @@
 #include "pycore_gc.h"
 #include "pycore_object.h"
 #include "pycore_immutability.h"
+#include "pycore_interp.h"
 #include "pycore_list.h"
+#include "pycore_weakref.h"
 
 
 // This file has many in progress aspects
@@ -90,44 +92,12 @@
 #define IMMUTABLE_FLAG_FIELD(op) (op->ob_refcnt)
 #endif
 
-static PyObject *
-_destroy(PyObject* set, PyObject *objweakref)
-{
-    Py_INCREF(set);
-    if (PySet_Discard(set, objweakref) < 0) {
-        Py_DECREF(set);
-        return NULL;
-    }
-    Py_DECREF(set);
-
-    Py_RETURN_NONE;
-}
-
-static PyMethodDef _destroy_def = {
-    "_destroy", (PyCFunction) _destroy, METH_O
-};
-
-static PyObject *
-type_weakref(struct _Py_immutability_state *state, PyObject *obj)
-{
-    if(state->destroy_cb == NULL){
-        state->destroy_cb = PyCFunction_NewEx(&_destroy_def, state->freezable_types, NULL);
-        if (state->destroy_cb == NULL) {
-            return NULL;
-        }
-    }
-
-    return PyWeakref_NewRef(obj, state->destroy_cb);
-}
+// Macro that jumps to error, if the expression `x` does not succeed.
+#define SUCCEEDS(x) { do { int r = (x); if (r != 0) goto error; } while (0); }
 
 static
 int init_state(struct _Py_immutability_state *state)
 {
-    state->freezable_types = PySet_New(NULL);
-    if(state->freezable_types == NULL){
-        return -1;
-    }
-
     state->warned_types = _Py_hashtable_new(
         _Py_hashtable_hash_ptr,
         _Py_hashtable_compare_direct);
@@ -139,6 +109,8 @@ int init_state(struct _Py_immutability_state *state)
         _Py_hashtable_hash_ptr,
         _Py_hashtable_compare_direct);
     if(state->shallow_immutable_types == NULL){
+        _Py_hashtable_destroy(state->warned_types);
+        state->warned_types = NULL;
         return -1;
     }
 
@@ -163,12 +135,45 @@ int init_state(struct _Py_immutability_state *state)
         NULL
     };
     for (int i = 0; shallow_types[i] != NULL; i++) {
-        if (_Py_hashtable_set(state->shallow_immutable_types,
-                              shallow_types[i], (void *)1) < 0) {
+        if (_PyImmutability_RegisterShallowImmutable(shallow_types[i])) {
             return -1;
         }
     }
 
+    PyTypeObject *builtin_freezable_types[] = {
+        &PyType_Type,
+        &PyBaseObject_Type,
+        &PyFunction_Type,
+        &PyList_Type,
+        &PyDict_Type,
+        &PySet_Type,
+        &PyMemoryView_Type,
+        &PyByteArray_Type,
+        &PyGetSetDescr_Type,
+        &PyMemberDescr_Type,
+        &PyProperty_Type,
+        &PyWrapperDescr_Type,
+        &PyMethodDescr_Type,
+        &PyClassMethod_Type, // TODO(Immutable): mjp I added this, is it correct? Discuss with maj
+        &PyClassMethodDescr_Type,
+        &PyStaticMethod_Type,
+        &PyMethod_Type,
+        &PyCapsule_Type,
+        &PyCode_Type,
+        &PyCell_Type,
+        &PyFrame_Type,
+        &_PyWeakref_RefType,
+        &PyModule_Type, // TODO(Immutable): mjp I added this, is it correct? Discuss with maj
+        &_PyImmModule_Type,
+        &PyCFunction_Type,
+        &_PyMethodWrapper_Type,
+        NULL
+    };
+    for (int i = 0; builtin_freezable_types[i] != NULL; i++) {
+        if (_PyImmutability_SetFreezable((PyObject*)builtin_freezable_types[i], _Py_FREEZABLE_YES)) {
+            return -1;
+        }
+    }
     return 0;
 }
 
@@ -176,7 +181,7 @@ static struct _Py_immutability_state* get_immutable_state(void)
 {
     PyInterpreterState* interp = PyInterpreterState_Get();
     struct _Py_immutability_state *state = &interp->immutability;
-    if(state->freezable_types == NULL){
+    if(state->shallow_immutable_types == NULL){
         if(init_state(state) == -1){
             PyErr_SetString(PyExc_RuntimeError, "Failed to initialize immutability state");
             return NULL;
@@ -185,23 +190,6 @@ static struct _Py_immutability_state* get_immutable_state(void)
 
     return state;
 }
-
-
-PyDoc_STRVAR(notfreezable_doc,
-    "NotFreezable()\n\
-    \n\
-    Indicate that a type cannot be frozen.");
-
-
-PyTypeObject _PyNotFreezable_Type = {
-    PyVarObject_HEAD_INIT(&PyType_Type, 0)
-    .tp_name = "NotFreezable",
-    .tp_doc = notfreezable_doc,
-    .tp_basicsize = sizeof(PyObject),
-    .tp_itemsize = 0,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_BASETYPE,
-    .tp_new = PyType_GenericNew
-};
 
 
 static int push(PyObject* s, PyObject* item){
@@ -255,25 +243,132 @@ static PyObject* pop(PyObject* s){
     return item;
 }
 
+
+
+/**
+ * The DFS walk for SCC calculations needs to perform actions on both
+ * the pre-order and post-order visits to an object.  To achieve this
+ * with a single stack we use a marker object (PostOrderMarker) to
+ * indicate that the object being popped is a post-order visit.
+ *
+ * Effectively we do
+ *   obj = pop()
+ *   if obj is PostOrderMarker:
+ *      obj = pop()
+ *      post_order_action(obj)
+ *   else:
+ *      push(obj)
+ *      push(PostOrderMarker)
+ *      pre_order_action(obj)
+ *
+ * In pre_order_action, the children of obj can be pushed onto the stack,
+ * and once all that work is completed, then the PostOrderMarker will pop out
+ * and the post_order_action can be performed.
+ *
+ * Using a separate object means it cannot conflict with anything
+ * in the actual python object graph.
+ */
+PyObject PostOrderMarkerStruct = _PyObject_HEAD_INIT(&_PyNone_Type);
+static PyObject* PostOrderMarker = &PostOrderMarkerStruct;
+
+/**
+ * `tp_traverse` and `tp_reachable` **should** visit their types but
+ * this is sometimes forgotten. To deal with this inconsistency we
+ * push the type on to the stack and use this marker to indicate that
+ * the type should only be visited if it is not marked as pending when
+ * the marker is reached again. We can then manually visit the type
+ * and print a warning.
+ *
+ * If the type is part of an SCC we may end up with a higher SCC-RC
+ * since this can only account for one internal edge. But this will
+ * just cause a memory leak instead of crashing.
+ */
+PyObject EnsureVisitedMarkerStruct = _PyObject_HEAD_INIT(&_PyNone_Type);
+static PyObject* EnsureVisitedMarker = &EnsureVisitedMarkerStruct;
+
 static bool is_c_wrapper(PyObject* obj){
     return PyCFunction_Check(obj) || Py_IS_TYPE(obj, &_PyMethodWrapper_Type) || Py_IS_TYPE(obj, &PyWrapperDescr_Type);
 }
+
+/**
+ * Used to track the state of an in progress freeze operation.
+ *
+ * TODO(Immutable):  This representation could mostly be done in the
+ * GC header for the GIL enabled build.  Doing it externally works for
+ * both builds, and we can optimize later.
+ **/
+struct FreezeState {
+#ifndef GIL_DISABLED
+    // Used to track traversal order
+    PyObject *dfs;
+    // Used to track SCC to handle cycles during traversal
+    PyObject *pending;
+#endif
+    // Used to track visited nodes that don't have inline GC state.
+    // This is required to be able to backtrack a failed freeze.
+    // It is also used to track nodes in GIL_DISABLED builds.
+    _Py_hashtable_t *visited;
+
+    // The objects that freeze() was called directly on.
+    _Py_hashtable_t *roots;
+
+    // Intrusive linked list of completed SCC representatives
+    // (threaded through _gc_prev / scc_parent), for rollback on error.
+    // NULL-terminated; NULL means empty.
+    PyObject *completed_sccs;
+
+    // A pointer to enclosing freeze states taken from the
+    // interpreter local immutable state
+    struct FreezeState *enclosing;
+    bool restart;
+#ifdef Py_DEBUG
+    // For debugging, track the stack trace of the freeze operation.
+    PyObject* freeze_location;
+#endif
+#ifdef MERMAID_TRACING
+    PyObject* start;
+#endif
+};
 
 // Wrapper around tp_traverse that also visits the type object.
 // tp_traverse does not visit the type for non-heap types, but
 // tp_reachable should visit all reachable objects including the type.
 static int
-traverse_via_tp_traverse(PyObject *obj, visitproc visit, void *arg)
+traverse_via_tp_traverse(PyObject *obj, visitproc visit, void *freeze_state_untyped)
 {
-    traverseproc traverse = Py_TYPE(obj)->tp_traverse;
+    PyTypeObject *tp = Py_TYPE(obj);
+
+    // `tp_traverse` of heap types *should* include a
+    // `Py_VISIT(Py_TYPE(self));` since around Python 2.7 but
+    // there are still plenty of types that don't. LLMs currently
+    // also don't do this consistently. So, instead of visiting the
+    // type directly we throw it on to the DFS stack to check the
+    // correct behavior on back traversal.
+    //
+    // Only push the type if it's still mutable and not pending
+    if (!_Py_IsImmutable(tp)) {
+        struct FreezeState* freeze_state = (struct FreezeState *)freeze_state_untyped;
+        SUCCEEDS(push(freeze_state->dfs, _PyObject_CAST(tp)));
+        SUCCEEDS(push(freeze_state->dfs, EnsureVisitedMarker));
+    }
+
+    traverseproc traverse = tp->tp_traverse;
     if (traverse != NULL) {
-        int err = traverse(obj, visit, arg);
+        int err = traverse(obj, visit, freeze_state_untyped);
         if (err) {
             return err;
         }
     }
 
-    return visit((PyObject *)Py_TYPE(obj), arg);
+    // Manually visit the type if it's a static type
+    if (!(tp->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        return visit((PyObject *)Py_TYPE(obj), freeze_state_untyped);
+    }
+
+    return 0;
+
+error:
+    return -1;
 }
 
 // Returns the appropriate traversal function for reaching all references
@@ -316,42 +411,6 @@ static inline void _Py_SetImmutable(PyObject *op)
 }
 #endif
 
-/**
- * Used to track the state of an in progress freeze operation.
- *
- * TODO(Immutable):  This representation could mostly be done in the
- * GC header for the GIL enabled build.  Doing it externally works for
- * both builds, and we can optimize later.
- **/
-struct FreezeState {
-#ifndef GIL_DISABLED
-    // Used to track traversal order
-    PyObject *dfs;
-    // Used to track SCC to handle cycles during traversal
-    PyObject *pending;
-#endif
-    // Used to track visited nodes that don't have inline GC state.
-    // This is required to be able to backtrack a failed freeze.
-    // It is also used to track nodes in GIL_DISABLED builds.
-    _Py_hashtable_t *visited;
-
-    // The objects that freeze() was called directly on.
-    _Py_hashtable_t *roots;
-
-    // Intrusive linked list of completed SCC representatives
-    // (threaded through _gc_prev / scc_parent), for rollback on error.
-    // NULL-terminated; NULL means empty.
-    PyObject *completed_sccs;
-
-#ifdef Py_DEBUG
-    // For debugging, track the stack trace of the freeze operation.
-    PyObject* freeze_location;
-#endif
-#ifdef MERMAID_TRACING
-    PyObject* start;
-#endif
-};
-
 
 #define REPRESENTATIVE_FLAG 1
 #define COMPLETE_FLAG 2
@@ -389,6 +448,9 @@ static int init_freeze_state(struct FreezeState *state)
     state->roots = _Py_hashtable_new(
         _Py_hashtable_hash_ptr,
         _Py_hashtable_compare_direct);
+
+    state->enclosing = NULL;
+    state->restart = false;
 #ifdef Py_DEBUG
     state->freeze_location = NULL;
 #endif
@@ -527,6 +589,16 @@ static void scc_init(PyObject* obj)
     if (_PyObject_GC_IS_TRACKED(obj)) {
         _PyObject_GC_UNTRACK(obj);
     }
+
+    // The GC uses the collecting flag to identify objects part of the
+    // current collection set. This flag remains while the finalizer
+    // of unreachable objects is being called.
+    //
+    // If something calls `freeze(obj)` as part of their finalizer we
+    // might receive an object with the flag set. This removes the flag
+    // to prevent future GC collections to assume this object is currently
+    // being collected.
+    _PyGC_CLEAR_COLLECTING(obj);
 
     // Mark as pending so we can detect back edges in the traversal.
 
@@ -694,7 +766,7 @@ static void scc_reset_root_refcount(PyObject* obj)
 }
 
 // This will restore the reference counts for the interior edges of the SCC.
-// It calculates some properites of the SCC, to decide how it might be
+// It calculates some properties of the SCC, to decide how it might be
 // finalised.  Adds an RC to every element in the SCC.
 static void scc_add_internal_refcounts(PyObject* obj, struct SCCDetails* details)
 {
@@ -772,16 +844,18 @@ static void scc_return_to_gc(PyObject* obj, bool decref_required)
         PyObject* c = n;
         n = scc_next(c);
         return_to_gc(c);
+        debug("Returned %p rc = %zu to GC\n", c, Py_REFCNT(c));
         if (decref_required) {
             Py_DECREF(c);
         }
-        debug_obj("Returned %s (%p) rc = %zu to GC\n", c, Py_REFCNT(c));
     } while (n != obj);
 }
 
 static void unfreeze(PyObject* obj)
 {
-    debug_obj("Unfreezing SCC starting at %s @ %p\n", obj);
+    // Repr should not be called with an exception set. This can therefore
+    // only print the memory address of the object
+    debug("Unfreezing SCC starting at %p\n", obj);
     if (scc_next(obj) == NULL)
     {
         // Clear Immutable flags
@@ -790,7 +864,7 @@ static void unfreeze(PyObject* obj)
         return_to_gc(obj);
         return;
     }
-    debug_obj("Unfreezing %s @ %p\n", obj);
+    debug("Unfreezing %p\n", obj);
     // Note: We don't need the details of the SCC for a simple unfreeze.
     struct SCCDetails scc_details;
     scc_reset_root_refcount(obj);
@@ -799,6 +873,248 @@ static void unfreeze(PyObject* obj)
     scc_return_to_gc(obj, true);
 }
 
+// Copy-pasted from weakrefobject.c
+static void weakref_handle_callback(PyWeakReference* ref, PyObject* callback)
+{
+    PyObject* cbresult = PyObject_CallOneArg(callback, (PyObject*)ref);
+
+    if (cbresult == NULL) {
+        PyErr_FormatUnraisable("Exception ignored while "
+                               "calling weakref callback %R", callback);
+    }
+    else {
+        Py_DECREF(cbresult);
+    }
+}
+
+// Copy-pasted from weakrefobject.c
+static void weakref_insert_head(PyWeakReference* newref, PyWeakReference** list)
+{
+    PyWeakReference* next = *list;
+
+    newref->wr_prev = NULL;
+    newref->wr_next = next;
+    if (next != NULL)
+        next->wr_prev = newref;
+    *list = newref;
+}
+
+static void weakref_remove(PyWeakReference* self, PyWeakReference** list)
+{
+    if (*list == self) {
+        *list = self->wr_next;
+    }
+    if (self->wr_prev != NULL) {
+        self->wr_prev->wr_next = self->wr_next;
+    }
+    if (self->wr_next != NULL) {
+        self->wr_next->wr_prev = self->wr_prev;
+    }
+    self->wr_prev = NULL;
+    self->wr_next = NULL;
+}
+
+static void weakref_decref_weakrefs(PyWeakReference* head)
+{
+    while (head != NULL) {
+        PyWeakReference* weakref = head;
+        head = weakref->wr_next;
+        weakref->wr_next = NULL;
+        weakref->wr_prev = NULL;
+        Py_DECREF(weakref);
+    }
+}
+
+typedef struct {
+    int32_t interpreters_remaining;
+    PyObject* to_dealloc;
+} callback_progress;
+
+typedef struct {
+    PyWeakReference* head;
+    callback_progress* progress;
+} pending_callbacks;
+
+/* Signal that the current interpreter handled the callbacks.
+ * If all interpreters have handled the callbacks, deallocate the object.
+ */
+static void weakref_signal_handled(callback_progress* progress)
+{
+    int32_t old = _Py_atomic_add_int32(
+        &progress->interpreters_remaining, -1);
+    if (old == 1) {
+        // All callbacks handled, trigger deallocation again.
+        Py_INCREF(progress->to_dealloc);
+        Py_DECREF(progress->to_dealloc);
+        PyMem_Free(progress);
+    }
+}
+
+/* Call the pending callbacks.
+ * This function can be executed asynchronously using Py_AddPendingCall.
+ */
+static int weakref_call_callbacks(void* arg)
+{
+    pending_callbacks* pending = (pending_callbacks*)arg;
+    PyWeakReference* head = pending->head;
+    debug("Interpreter %zd handling callbacks for dying object %p\n",
+        PyInterpreterState_GetID(PyInterpreterState_Get()),
+        pending->progress->to_dealloc);
+
+    while (head != NULL) {
+        PyWeakReference* weakref = head;
+        PyObject* callback = weakref->wr_callback;
+        assert(callback != NULL);
+        weakref->wr_callback = NULL;
+        weakref_handle_callback(weakref, callback);
+        Py_DECREF(callback);
+        head = weakref->wr_next;
+        weakref->wr_next = NULL;
+        weakref->wr_prev = NULL;
+        Py_DECREF(weakref);
+    }
+
+    weakref_signal_handled(pending->progress);
+    PyMem_Free(pending);
+    // Report success as per Py_AddPendingCall contract
+    return 0;
+}
+
+/* Schedule the callbacks on the given interpreter. */
+static void weakref_schedule_callbacks(int64_t ipid, pending_callbacks* pending)
+{
+    // FIXME(Immutable): Can the interpreter go away in the middle of scheduling?
+    PyInterpreterState* target_is = _PyInterpreterState_LookUpID(ipid);
+    if (target_is == NULL) {
+        // Interpreter is already gone.
+        goto abort;
+    }
+    // We just need to get any thread state to schedule the call.
+    PyThreadState* tstate_target = PyInterpreterState_ThreadHead(target_is);
+    if (tstate_target == NULL) {
+        goto abort;
+    }
+    PyThreadState* tstate_old = PyThreadState_Swap(tstate_target);
+    int schedule_res = Py_AddPendingCall(weakref_call_callbacks, (void*)pending);
+    PyThreadState_Swap(tstate_old);
+    if (schedule_res != 0) {
+        goto abort;
+    }
+    return;
+
+abort:
+    PyMem_Free(pending);
+    weakref_decref_weakrefs(pending->head);
+    return;
+}
+
+/* Remove callbacks with the given ipid from the list.
+ * Return them as a new list.
+ */
+static PyWeakReference* weakref_separate_ipid(PyWeakReference** list, int64_t ipid)
+{
+    PyWeakReference* result = NULL;
+    PyWeakReference* next = *list;
+    while (next != NULL) {
+        PyWeakReference* current = next;
+        next = next->wr_next;
+        if (current->callback_ipid == ipid) {
+            weakref_remove(current, list);
+            weakref_insert_head(current, &result);
+        }
+    }
+    return result;
+}
+
+/* Distribute the callbacks to their original interpreters.
+ * Returns:
+ * (true) The caller can proceed with deallocating 'to_dealloc'.
+ * (false) Callbacks were scheduled, deallocation will be triggered again.
+ */
+static int weakref_distribute_callbacks(PyWeakReference* head, PyObject* to_dealloc)
+{
+    if (head == NULL) {
+        return true;
+    }
+
+    debug("Clearing weakrefs of %p.\n", to_dealloc);
+    // We want to continue with deallocation after calling all the callbacks.
+    callback_progress* progress = PyMem_Malloc(sizeof(callback_progress));
+    if (progress == NULL) {
+        // Give up calling callbacks.
+        weakref_decref_weakrefs(head);
+        return true;
+    }
+    // Start with 1, decremented at the end of this function.
+    // This way, we prevent hitting zero before all callbacks are scheduled.
+    progress->interpreters_remaining = 1;
+    progress->to_dealloc = to_dealloc;
+
+    // Schedule the callbacks on their original interpreters.
+    while (head != NULL) {
+        int64_t ipid = head->callback_ipid;
+        PyWeakReference* ip_callbacks = weakref_separate_ipid(&head, ipid);
+        // Create a data structure to hold arguments for the async call.
+        pending_callbacks* pending = PyMem_Malloc(sizeof(pending_callbacks));
+        if (pending == NULL) {
+            // Give up calling callbacks.
+            weakref_decref_weakrefs(ip_callbacks);
+            continue;
+        }
+
+        _Py_atomic_add_int32(&progress->interpreters_remaining, 1);
+        pending->head = ip_callbacks;
+        pending->progress = progress;
+        if (PyInterpreterState_GetID(PyInterpreterState_Get()) == ipid) {
+            // We can run the callback here.
+            weakref_call_callbacks((void*)pending);
+        }
+        else {
+            // We need to schedule the callback on the target interpreter.
+            weakref_schedule_callbacks(ipid, pending);
+        }
+    }
+
+    weakref_signal_handled(progress);
+    return false;
+}
+
+/* Clear weakrefs with callbacks for an SCC, and call them.
+ * Returns:
+ * (true) Deallocation can continue.
+ * (false) Callbacks were scheduled, deallocation will be triggered again.
+ */
+static int weakref_handle_callbacks_scc(PyObject* obj)
+{
+    // Collect weakrefs with callbacks into a list.
+    PyWeakReference* head = NULL;
+    PyObject* n = obj;
+    do {
+        PyObject* c = n;
+        n = scc_next(c);
+        if (_PyType_SUPPORTS_WEAKREFS(Py_TYPE(c))) {
+            _PyImmutability_ClearWeakRefsWithCallback(c, &head);
+        }
+    } while (n != obj);
+
+    return weakref_distribute_callbacks(head, obj);
+}
+
+/* Clear weakrefs with callbacks for a single object, and call them.
+ * Returns:
+ * (true) Deallocation can continue.
+ * (false) Callbacks were scheduled, deallocation will be triggered again.
+ */
+static int weakref_handle_callbacks_single(PyObject* obj)
+{
+    if (!_PyType_SUPPORTS_WEAKREFS(Py_TYPE(obj))) {
+        return true;
+    }
+    // Collect weakrefs with callbacks into a list.
+    PyWeakReference* head = NULL;
+    _PyImmutability_ClearWeakRefsWithCallback(obj, &head);
+    return weakref_distribute_callbacks(head, obj);
+}
 
 static void unfreeze_and_finalize_scc(PyObject* obj)
 {
@@ -808,12 +1124,11 @@ static void unfreeze_and_finalize_scc(PyObject* obj)
     scc_set_refcounts_to_one(obj);
     scc_add_internal_refcounts(obj, &scc_details);
 
-    // These are cases that we don't handle.  Return the state as mutable to the
-    // cycle detector to handle.
-    // TODO(Immutable): Lift the weak references to be handled here.
-    if (scc_details.has_weakreferences > 0 || scc_details.has_legacy_finalizers > 0) {
-        debug("There are weak references or legacy finalizers in the SCC.  Let cycle detector handle this case.\n");
-        debug("Weak references: %d, Legacy finalizers: %d\n", scc_details.has_weakreferences, scc_details.has_legacy_finalizers);
+    // We don't handle legacy finalizers.
+    // Return the state as mutable to the cycle detector to handle.
+    if (scc_details.has_legacy_finalizers > 0) {
+        debug("There are legacy finalizers in the SCC.  Let cycle detector handle this case.\n");
+        debug("Legacy finalizers: %d\n", scc_details.has_legacy_finalizers);
         scc_make_mutable(obj);
         scc_return_to_gc(obj, true);
         return;
@@ -840,10 +1155,22 @@ static void unfreeze_and_finalize_scc(PyObject* obj)
         } while (n != obj);
     }
 
+    if (scc_details.has_weakreferences) {
+        // Clear the remaining weakrefs without calling callbacks.
+        n = obj;
+        do {
+            PyObject* c = n;
+            n = scc_next(c);
+            if (_PyType_SUPPORTS_WEAKREFS(Py_TYPE(c))) {
+                _PyWeakref_ClearWeakRefsNoCallbacks(c);
+            }
+        } while (n != obj);
+    }
+
     // tp_clear all elements in the cycle.
     n = obj;
     do {
-        debug_obj("Clearing %s (%p)\n", n);
+        debug("Clearing (%p)\n", n);
         PyObject* c = n;
         n = scc_next(c);
         inquiry clear;
@@ -860,33 +1187,6 @@ static void unfreeze_and_finalize_scc(PyObject* obj)
     // elements of the SCC so that they can be reclaimed
     scc_return_to_gc(obj, true);
 }
-
-
-/**
- * The DFS walk for SCC calculations needs to perform actions on both
- * the pre-order and post-order visits to an object.  To achieve this
- * with a single stack we use a marker object (PostOrderMarker) to
- * indicate that the object being popped is a post-order visit.
- *
- * Effectively we do
- *   obj = pop()
- *   if obj is PostOrderMarker:
- *      obj = pop()
- *      post_order_action(obj)
- *   else:
- *      push(obj)
- *      push(PostOrderMarker)
- *      pre_order_action(obj)
- *
- * In pre_order_action, the children of obj can be pushed onto the stack,
- * and once all that work is completed, then the PostOrderMarker will pop out
- * and the post_order_action can be performed.
- *
- * Using a separate object means it cannot conflict with anything
- * in the actual python object graph.
- */
-PyObject PostOrderMarkerStruct = _PyObject_HEAD_INIT(&_PyNone_Type);
-static PyObject* PostOrderMarker = &PostOrderMarkerStruct;
 
 /*
   When we first visit an object, we create a partial SCC for it,
@@ -1025,7 +1325,7 @@ static int rollback_refcount_visit(PyObject* obj, void* ring_ht)
 */
 static void rollback_completed_scc(PyObject* obj)
 {
-    debug_obj("Rolling back SCC starting at %s @ %p\n", obj);
+    debug("Rolling back SCC starting at %p\n", obj);
 
     _Py_hashtable_t *ring = _Py_hashtable_new(
         _Py_hashtable_hash_ptr,
@@ -1125,122 +1425,6 @@ static void mark_all_frozen(struct FreezeState *state)
 #endif
 }
 
-/**
- * Special function for replacing globals and builtins with a copy of just what they use.
- *
- * This is necessary because the function object has a pointer to the global
- * dictionary, and this is problematic because freezing any function directly
- * (as we do with other objects) would make all globals immutable.
- *
- * Instead, we walk the function and find any places where it references
- * global variables or builtins, and then freeze just those objects. The globals
- * and builtins dictionaries for the function are then replaced with
- * copies containing just those globals and builtins we were able to determine
- * the function uses.
- */
-static int shadow_function_globals(PyObject* op)
-{
-    _PyObject_ASSERT(op, PyFunction_Check(op));
-
-    PyObject* shadow_builtins = NULL;
-    PyObject* shadow_globals = NULL;
-    PyObject* shadow_closure = NULL;
-    Py_ssize_t size;
-
-    PyFunctionObject* f = _PyFunction_CAST(op);
-    PyObject* globals = f->func_globals;
-    PyObject* builtins = f->func_builtins;
-
-    shadow_builtins = PyDict_New();
-    if(shadow_builtins == NULL){
-        goto nomemory;
-    }
-
-    debug("Shadowing builtins for function %s (%p)\n", f->func_name, f);
-    debug(" Original builtins: %p\n", builtins);
-    debug(" Shadow builtins:   %p\n", shadow_builtins);
-
-    shadow_globals = PyDict_New();
-    if(shadow_globals == NULL){
-        goto nomemory;
-    }
-    debug("Shadowing globals for function %s (%p)\n", f->func_name, f);
-    debug(" Original globals: %p\n", globals);
-    debug(" Shadow globals:   %p\n", shadow_globals);
-
-    if (PyDict_SetItemString(shadow_globals, "__builtins__", Py_NewRef(shadow_builtins))) {
-        goto error;
-    }
-
-    _PyObject_ASSERT(f->func_code, PyCode_Check(f->func_code));
-    PyCodeObject* f_code = (PyCodeObject*)f->func_code;
-
-    size = 0;
-    if (f_code->co_names != NULL)
-        size = PySequence_Fast_GET_SIZE(f_code->co_names);
-    for (Py_ssize_t i = 0; i < size; i++) {
-        PyObject* name = PySequence_Fast_GET_ITEM(f_code->co_names, i);
-
-        if( PyDict_Contains(globals, name)){
-            PyObject* value = PyDict_GetItem(globals, name);
-            if (PyDict_SetItem(shadow_globals, Py_NewRef(name), Py_NewRef(value))) {
-                goto error;
-            }
-        } else if (PyDict_Contains(builtins, name)) {
-            PyObject* value = PyDict_GetItem(builtins, name);
-            if (PyDict_SetItem(shadow_builtins, Py_NewRef(name), Py_NewRef(value))) {
-                goto error;
-            }
-        }
-    }
-
-    // Shadow cells with a new frozen cell to warn on reassignments in the
-    // capturing function.
-    size = 0;
-    if(f->func_closure != NULL) {
-        size = PyTuple_Size(f->func_closure);
-        if (size == -1) {
-            goto error;
-        }
-        shadow_closure = PyTuple_New(size);
-        if (shadow_closure == NULL) {
-            goto error;
-        }
-    }
-    for(Py_ssize_t i=0; i < size; ++i){
-        PyObject* cellvar = PyTuple_GET_ITEM(f->func_closure, i);
-        PyObject* value = PyCell_GET(cellvar);
-
-        PyObject* shadow_cellvar = PyCell_New(value);
-        if(PyTuple_SetItem(shadow_closure, i, shadow_cellvar) == -1){
-            goto error;
-        }
-    }
-
-    if (f->func_annotations == NULL) {
-        PyObject* new_annotations = PyDict_New();
-        if (new_annotations == NULL) {
-            goto nomemory;
-        }
-        f->func_annotations = new_annotations;
-    }
-
-    // Only assign them at the end when everything succeeded
-    Py_XSETREF(f->func_closure, shadow_closure);
-    Py_SETREF(f->func_globals, shadow_globals);
-    Py_SETREF(f->func_builtins, shadow_builtins);
-
-    return 0;
-
-nomemory:
-    PyErr_NoMemory();
-error:
-    Py_XDECREF(shadow_builtins);
-    Py_XDECREF(shadow_globals);
-    Py_XDECREF(shadow_closure);
-    return -1;
-}
-
 static int freeze_visit(PyObject* obj, void* freeze_state_untyped)
 {
     struct FreezeState* freeze_state = (struct FreezeState *)freeze_state_untyped;
@@ -1264,72 +1448,6 @@ static int freeze_visit(PyObject* obj, void* freeze_state_untyped)
 
     return 0;
 }
-
-
-
-static bool
-is_freezable_builtin(PyTypeObject *type)
-{
-    if(
-        type == &PyType_Type ||
-        type == &PyBaseObject_Type ||
-        type == &PyFunction_Type ||
-        type == &_PyNone_Type ||
-        type == &PyBool_Type ||
-        type == &PyLong_Type ||
-        type == &PyFloat_Type ||
-        type == &PyComplex_Type ||
-        type == &PyBytes_Type ||
-        type == &PyUnicode_Type ||
-        type == &PyTuple_Type ||
-        type == &PyList_Type ||
-        type == &PyDict_Type ||
-        type == &PySet_Type ||
-        type == &PyFrozenSet_Type ||
-        type == &PyMemoryView_Type ||
-        type == &PyByteArray_Type ||
-        type == &PyRange_Type ||
-        type == &PyGetSetDescr_Type ||
-        type == &PyMemberDescr_Type ||
-        type == &PyProperty_Type ||
-        type == &PyWrapperDescr_Type ||
-        type == &PyMethodDescr_Type ||
-        type == &PyClassMethod_Type || // TODO(Immutable): mjp I added this, is it correct? Discuss with maj
-        type == &PyClassMethodDescr_Type ||
-        type == &PyStaticMethod_Type ||
-        type == &PyMethod_Type ||
-        type == &PyCFunction_Type ||
-        type == &PyCapsule_Type ||
-        type == &PyCode_Type ||
-        type == &PyCell_Type ||
-        type == &PyFrame_Type ||
-        type == &_PyWeakref_RefType ||
-        type == &_PyNotImplemented_Type || // TODO(Immutable): mjp I added this, is it correct? Discuss with maj
-        type == &PyModule_Type || // TODO(Immutable): mjp I added this, is it correct? Discuss with maj
-        type == &_PyImmModule_Type ||
-        type == &PyEllipsis_Type
-     )
-     {
-         return true;
-     }
-
-     return false;
-}
-
-static int
-is_explicitly_freezable(struct _Py_immutability_state *state, PyObject *obj)
-{
-    int result = 0;
-    PyObject *ref = type_weakref(state, (PyObject *)obj->ob_type);
-    if(ref == NULL){
-        return -1;
-    }
-
-    result = PySet_Contains(state->freezable_types, ref);
-    Py_DECREF(ref);
-    return result;
-}
-
 
 static int check_freezable(struct _Py_immutability_state *state, PyObject* obj,
                            struct FreezeState *freeze_state)
@@ -1355,27 +1473,6 @@ static int check_freezable(struct _Py_immutability_state *state, PyObject* obj,
         }
     }
 
-    // Check is object is subclass of NotFreezable
-    // TODO: Would be nice for this to be faster.
-    if (PyObject_IsInstance(obj, (PyObject *)&_PyNotFreezable_Type) == 1){
-        goto error;
-    }
-
-    if(is_freezable_builtin(obj->ob_type)){
-        return 0;
-    }
-
-    // TODO(Immutable): Fail is type is not already frozen.
-    // This will require the test suite to be updated.
-
-    int result = is_explicitly_freezable(state, obj);
-    if(result == -1){
-        return -1;
-    }
-    else if(result == 1){
-        return 0;
-    }
-
     // TODO(Immutable): Visit what the right balance of making Python types immutable is.
     if(!_PyType_HasExtensionSlots(obj->ob_type)){
         return 0;
@@ -1391,28 +1488,7 @@ error:
 }
 
 
-int _PyImmutability_RegisterFreezable(PyTypeObject* tp)
-{
-    PyObject *ref;
-    int result;
-    struct _Py_immutability_state *state = get_immutable_state();
-    if(state == NULL){
-        PyErr_SetString(PyExc_RuntimeError, "Failed to initialize immutability state");
-        return -1;
-    }
-
-    ref = type_weakref(state, (PyObject*)tp);
-    if(ref == NULL){
-        return -1;
-    }
-
-    result = PySet_Add(state->freezable_types, ref);
-    Py_DECREF(ref);
-    return result;
-}
-
-
-int _PyImmutability_SetFreezable(PyObject *obj, int status)
+int _PyImmutability_SetFreezable(PyObject *obj, _Py_freezable_status status)
 {
     if (status < _Py_FREEZABLE_YES || status > _Py_FREEZABLE_PROXY) {
         PyErr_Format(PyExc_ValueError,
@@ -1437,13 +1513,23 @@ int _PyImmutability_SetFreezable(PyObject *obj, int status)
     if (rc == 0) {
         return 0;
     }
-    // If the object doesn't support attribute setting, fall back
-    // to ob_flags (64-bit only).
-    if (!PyErr_ExceptionMatches(PyExc_AttributeError)) {
+
+    // If setting the attribute failed, only fall back to ob_flags for
+    // "attribute not supported / read-only" cases. Propagate all other
+    // exceptions to the caller.
+    if (PyErr_ExceptionMatches(PyExc_AttributeError) ||
+        PyErr_ExceptionMatches(PyExc_TypeError))
+    {
+        PyErr_Clear();
+    }
+    else {
+        // Preserve the original error (e.g. MemoryError or a custom
+        // tp_setattro exception).
         return -1;
     }
-    PyErr_Clear();
 
+    // If the object doesn't support attribute setting, fall back
+    // to ob_flags (64-bit only).
 #if SIZEOF_VOID_P > 4
     // Store the freezable status in ob_flags bits 5-7.
     uint16_t flags = obj->ob_flags;
@@ -1549,6 +1635,11 @@ int _PyImmutability_RegisterShallowImmutable(PyTypeObject* tp)
     if (_Py_hashtable_set(state->shallow_immutable_types,
                           (void *)tp, (void *)1) < 0) {
         PyErr_NoMemory();
+        return -1;
+    }
+
+    // Mark the type also as freezable
+    if (_PyImmutability_SetFreezable((PyObject*)tp, _Py_FREEZABLE_YES)) {
         return -1;
     }
     return 0;
@@ -1725,10 +1816,7 @@ int _Py_DecRef_Immutable(PyObject *op)
 
 #if SIZEOF_VOID_P > 4
 
-    Py_ssize_t old = _Py_atomic_add_int64(&op->ob_refcnt_full, -1);
-    // The ssize_t might be too big, so mask to 32 bits as that is the size of
-    // ob_refcnt.
-    old = old & 0xFFFFFFFF;
+    uint32_t old = _Py_atomic_add_uint32(&op->ob_refcnt, -1);
 #else
     // TODO(Immutable 32): Find SCC if required.
 
@@ -1747,13 +1835,26 @@ int _Py_DecRef_Immutable(PyObject *op)
 
     assert(_Py_IMMUTABLE_FLAG_CLEAR(op->ob_refcnt) == 0);
 
-    if (PyObject_IS_GC(op)) {
-        if (scc_next(op) != NULL) {
-            // This is part of an SCC, so we need to turn it back into mutable state,
-            // and correctly re-establish RCs.
-            unfreeze_and_finalize_scc(op);
+    // First, we only clear weakrefs with callbacks.
+    // Callbackless weakrefs are cleared after finalizers have run.
+    // See the comment in Python/gc.c above handle_weakref_callbacks.
+
+    if (PyObject_IS_GC(op) && scc_next(op) != NULL) {
+        // This object is the root of an SCC.
+        if (!weakref_handle_callbacks_scc(op)) {
+            // Callbacks were scheduled, deallocation will be triggered again.
             return false;
         }
+        // We need to turn the SCC back into mutable state
+        // and correctly re-establish RCs.
+        unfreeze_and_finalize_scc(op);
+        return false;
+    }
+    if (!weakref_handle_callbacks_single(op)) {
+        // Callbacks were scheduled, deallocation will be triggered again.
+        return false;
+    }
+    if (PyObject_IS_GC(op)) {
         // This is a GC object, so we need to put it back on the GC list.
         debug("Returning to GC simple case %p\n", op);
         return_to_gc(op);
@@ -1788,15 +1889,208 @@ void _Py_RefcntAdd_Immutable(PyObject *op, Py_ssize_t increment)
     // Increment the reference count of an immutable object.
     assert(_Py_IsImmutable(op));
 #if SIZEOF_VOID_P > 4
-    _Py_atomic_add_int64(&op->ob_refcnt_full, increment);
+    _Py_atomic_add_uint32(&op->ob_refcnt, increment);
 #else
     _Py_atomic_add_ssize(&op->ob_refcnt, increment);
 #endif
 }
 
+/* Tries to incref op and returns 1 if successful or 0 otherwise.
+ * Used when creating a strong reference from a weak reference.
+ * Needs to hold the weakref list lock (LOCK_WEAKREFS).
+ */
+int _Py_TryIncref_Immutable(PyObject *op)
+{
+    assert(_Py_IsImmutable(op));
+    op = scc_root(op);
+    assert(_Py_IsImmutable(op));
 
-// Macro that jumps to error, if the expression `x` does not succeed.
-#define SUCCEEDS(x) { do { int r = (x); if (r != 0) goto error; } while (0); }
+#if SIZEOF_VOID_P > 4
+    uint32_t old = _Py_atomic_load_uint32_relaxed(&op->ob_refcnt);
+    while (old > 0) {
+        if (_Py_atomic_compare_exchange_uint32(&op->ob_refcnt, &old, old + 1)) {
+            return 1;
+        }
+    }
+#else
+    Py_ssize_t old = _Py_atomic_load_ssize_relaxed(&op->ob_refcnt);
+    while (_Py_IMMUTABLE_FLAG_CLEAR(old) != 0) {
+        if (_Py_atomic_compare_exchange_ssize(&op->ob_refcnt, &old, old + 1)) {
+            return 1;
+        }
+    }
+#endif
+    return 0;
+}
+
+/* Returns 1 if there are no references to the object's SCC. */
+int _Py_IsDead_Immutable(PyObject *op)
+{
+    assert(_Py_IsImmutable(op));
+    op = scc_root(op);
+    assert(_Py_IsImmutable(op));
+
+#if SIZEOF_VOID_P > 4
+    return _Py_atomic_load_uint32_relaxed(&op->ob_refcnt) == 0;
+#else
+    return _Py_IMMUTABLE_FLAG_CLEAR(_Py_atomic_load_ssize_relaxed(&op->ob_refcnt)) == 0;
+#endif
+}
+
+static void make_weakrefs_safe_scc(PyObject* scc)
+{
+    PyObject* current = scc;
+    do {
+        _PyWeakref_OnObjectFreeze(current);
+        current = scc_next(current);
+    } while (current != NULL && current != scc);
+}
+
+static int make_weakrefs_safe_visited(
+    _Py_hashtable_t* tbl, const void* key, const void* value, void* unused)
+{
+    (void)tbl;
+    (void)value;
+    (void)unused;
+    _PyWeakref_OnObjectFreeze((PyObject*)key);
+    return 0;
+}
+
+/* Make weakrefs to newly frozen objects thread-safe. */
+static void make_weakrefs_safe(struct FreezeState* freeze_state)
+{
+    // Handle weakrefs to completed SCCs.
+    PyObject *scc = freeze_state->completed_sccs;
+    while (scc != NULL) {
+        PyObject *next = scc_parent(scc);
+        make_weakrefs_safe_scc(scc);
+        scc = next;
+    }
+    // Handle weakrefs to non-GC visited objects.
+    _Py_hashtable_foreach(freeze_state->visited,
+                          make_weakrefs_safe_visited, NULL);
+
+}
+
+/* This undoes a freeze belonging to the given state */
+static void undo_freeze(struct FreezeState* state) {
+    debug("Unfreezing all frozen objects belonging to %p\n", state);
+
+    // Clear dfs stack
+    while(PyList_Size(state->dfs) > 0){
+        pop(state->dfs);
+    }
+
+    // Clear pending stack
+    while (PyList_Size(state->pending) > 0) {
+        PyObject* item = pop(state->pending);
+        assert(item != NULL);
+        if (item == PostOrderMarker || item == EnsureVisitedMarker) {
+            continue;
+        }
+        unfreeze(item);
+    }
+
+    // Unfreeze completed SCCs via intrusive linked list.
+    PyObject *scc = state->completed_sccs;
+    while (scc != NULL) {
+        // Read next link before rollback clears _gc_prev.
+        PyObject *next = scc_parent(scc);
+        if (scc_next(scc) == NULL) {
+            // Single-member SCC: just clear flags and return to GC.
+            _Py_CLEAR_IMMUTABLE(scc);
+            return_to_gc(scc);
+        } else {
+            rollback_completed_scc(scc);
+        }
+        scc = next;
+    }
+    state->completed_sccs = NULL;
+
+    // Clear immutability flags on non-GC visited objects.
+    _Py_hashtable_foreach(state->visited,
+                          clear_immutable_visitor, NULL);
+}
+
+/* This undoes enclosing freezes and marks them to be restarted */
+static void restart_enclosing_freezes(struct _Py_immutability_state* imm_state) {
+    struct FreezeState* freeze_state = imm_state->freeze_stack;
+
+    debug("Restarting enclosing freezes of %p\n", freeze_state);
+
+    // Skip the current call, and only walk the enclosing ones
+    freeze_state = freeze_state->enclosing;
+    // Mark all enclosing freezes for restart
+    while (freeze_state) {
+        undo_freeze(freeze_state);
+        freeze_state->restart = true;
+        freeze_state = freeze_state->enclosing;
+    }
+}
+
+static int _run_pre_freeze_hook(struct _Py_immutability_state *imm_state, PyObject* obj) {
+    // 1. Check for the `__pre_freeze__` name
+    PyObject *attr = NULL;
+    int res = PyObject_GetOptionalAttr(obj, &_Py_ID(__pre_freeze__), &attr);
+    if (res == -1) {
+        return -1;
+    } else if (res == 1) {
+        if (!PyCallable_Check(attr)) {
+            PyErr_Format(
+                PyExc_TypeError,
+                "'%.200s.__pre_freeze__' is not callable",
+                Py_TYPE(obj)->tp_name);
+            Py_DECREF(attr);
+            return -1;
+        }
+        PyObject *result = PyObject_CallNoArgs(attr);
+        Py_DECREF(attr);
+        if (result == NULL) {
+            return -1;
+        }
+        Py_DECREF(result);
+    }
+
+    // 2. Check the type for `tp_prefreeze`
+    prefreezeproc prefreeze = Py_TYPE(obj)->tp_prefreeze;
+    if (prefreeze != NULL) {
+        return prefreeze(obj);
+    }
+
+    // No pre-freeze hook, so we're good to go.
+    return 0;
+}
+
+static int check_pre_freeze_hook(struct _Py_immutability_state *imm_state, PyObject* obj) {
+    // Skip Python-level hook lookup for type objects. For classes,
+    // `__pre_freeze__` resolves to an unbound function and calling it as a
+    // normal bound method would fail with a missing 'self' argument.
+    if (PyType_Check(obj)) {
+        return 0;
+    }
+
+    // Pre-freeze hooks are never called for shallow immutable objects
+    if (is_shallow_immutable(imm_state, obj)) {
+        return 0;
+    }
+
+    // Check if the pre-freeze hook already ran for this object
+#if SIZEOF_VOID_P > 4
+    if ((obj->ob_flags & _Py_PREFREEZE_RAN_FLAG) != 0) {
+        return 0;
+    }
+#else
+#error "Immutability currently only works on 64bit platforms"
+#endif
+
+    // Mark pre-freeze hook as completed. This has to be set before calling
+    // the pre-freeze hook in case the pre-freeze hook reenters to prevent
+    // an infinite loop.
+    obj->ob_flags |= _Py_PREFREEZE_RAN_FLAG;
+
+    // Run the pre-freeze hook if it's present.
+    return _run_pre_freeze_hook(imm_state, obj);
+}
 
 static int traverse_freeze(PyObject* obj, struct FreezeState* freeze_state)
 {
@@ -1808,33 +2102,11 @@ static int traverse_freeze(PyObject* obj, struct FreezeState* freeze_state)
     TRACE_MERMAID_NODE(obj);
 #endif
 
-    debug_obj("%s (%p) rc=%zd\n", obj, Py_REFCNT(obj));
+    debug_obj("Traversing %s (%p) rc=%zd\n", obj, Py_REFCNT(obj));
 
     if(is_c_wrapper(obj)) {
+        // FIXME(Immutable): Is this still needed?
         set_direct_rc(obj);
-        // C functions are not mutable
-        // Types are manually traversed
-        return 0;
-    }
-
-    PyObject *attr = NULL;
-    if (PyObject_GetOptionalAttr(obj, &_Py_ID(__pre_freeze__), &attr) == 1)
-    {
-        PyErr_SetString(PyExc_TypeError, "Pre-freeze hocks are currently WIP");
-        Py_XDECREF(attr);
-        return -1;
-    }
-    Py_XDECREF(attr);
-
-    // Function require some work to freeze, so we do not freeze the
-    // world as they mention globals and builtins.  This will shadow what they
-    // use, and then we can freeze the those components.
-    if(PyFunction_Check(obj)){
-        SUCCEEDS(shadow_function_globals(obj));
-    }
-
-    if (PyModule_Check(obj)) {
-        SUCCEEDS(_Py_module_freeze_hook(obj));
     }
 
     SUCCEEDS(get_reachable_proc(Py_TYPE(obj))(obj, (visitproc)freeze_visit, freeze_state));
@@ -1845,6 +2117,10 @@ static int traverse_freeze(PyObject* obj, struct FreezeState* freeze_state)
     if (PyWeakref_Check(obj)) {
         // Make the weak reference strong.
         // Get Ref increments the refcount.
+        //
+        // This could be done via a pre-freeze hook, but we only want to keep
+        // the strong reference if freezing succeeds. Having this as a special
+        // case makes this easier to handle.
         PyObject* wr;
         int res = PyWeakref_GetRef(obj, &wr);
         if (res == -1) {
@@ -1920,15 +2196,31 @@ late_init(struct _Py_immutability_state *state)
 static int
 freeze_impl(PyObject *const *objs, Py_ssize_t nobjs)
 {
+    struct _Py_immutability_state* imm_state = NULL;
     int result = 0;
     TRACE_MERMAID_START();
 
-    struct FreezeState freeze_state;
     // Initialize the freeze state
+    struct FreezeState freeze_state;
     SUCCEEDS(init_freeze_state(&freeze_state));
-    struct _Py_immutability_state* imm_state = get_immutable_state();
+
+    // Get Immutable state
+    imm_state = get_immutable_state();
     if(imm_state == NULL){
         goto error;
+    }
+    freeze_state.enclosing = imm_state->freeze_stack;
+    imm_state->freeze_stack = &freeze_state;
+    debug("\nfreeze_impl start. State ptr: %p\n", &freeze_state);
+
+    // The SCC algorithm can't handle nested calls directly. So, we
+    // treat freezing like transactions. We simply roll back enclosing
+    // freeze calls and mark them to be restarted.
+    //
+    // Pre-freeze hooks only run once, this ensures progress and that
+    // we'll eventually terminate.
+    if (freeze_state.enclosing) {
+        restart_enclosing_freezes(imm_state);
     }
 
     // Register all roots and push onto the DFS stack
@@ -1936,6 +2228,11 @@ freeze_impl(PyObject *const *objs, Py_ssize_t nobjs)
         if (_Py_IsImmutable(objs[i])) {
             continue;
         }
+        // FIXME(immutable): It is not quite clear how `Explicit` should work
+        // for nested freeze calls. One could argue that they should be frozen
+        // if they're the root of at least one freeze call. Even if this is an
+        // enclosing `freeze` call. For now we only allow `freeze` to explicitly
+        // freeze root objects of its own freeze call and ignore enclosing ones.
         if (_Py_hashtable_set(freeze_state.roots, objs[i], objs[i]) < 0) {
             PyErr_NoMemory();
             goto error;
@@ -1967,6 +2264,22 @@ freeze_impl(PyObject *const *objs, Py_ssize_t nobjs)
     }
 #endif
 
+    // A nested `freeze()` call forced a restart of this freeze
+    // the roots remain the same, but we have to repopulate the
+    // DFS stack
+    if (false) {
+restart:
+        assert(PyList_Size(freeze_state.dfs) == 0);
+        assert(PyList_Size(freeze_state.pending) == 0);
+        for (Py_ssize_t i = 0; i < nobjs; i++) {
+            if (_Py_IsImmutable(objs[i])) {
+                continue;
+            }
+            SUCCEEDS(push(freeze_state.dfs, objs[i]));
+        }
+        freeze_state.restart = false;
+    }
+
     while (PyList_Size(freeze_state.dfs) != 0) {
         PyObject* item = pop(freeze_state.dfs);
 
@@ -1984,6 +2297,29 @@ freeze_impl(PyObject *const *objs, Py_ssize_t nobjs)
                 // Completed an SCC do the calculation here.
                 complete_scc(item, &freeze_state);
             }
+            continue;
+        }
+
+        if (item == EnsureVisitedMarker) {
+            item = pop(freeze_state.dfs);
+
+            // Ignore item if it has been visited
+            if (has_visited(&freeze_state, item)) {
+                continue;
+            }
+
+            // Print a warning to get this fixed quickly
+            PyTypeObject* tp = Py_TYPE(item);
+            if (PyType_Check(item)) {
+                tp = _PyType_CAST(item);
+            }
+            PySys_FormatStderr(
+                "freeze: type '%.100s' is not visiting the type during traversal\n",
+                tp->tp_name);
+
+            // Manually calling freeze will add it to the DFS stack
+            freeze_visit(item, (void*)&freeze_state);
+
             continue;
         }
 
@@ -2005,6 +2341,20 @@ freeze_impl(PyObject *const *objs, Py_ssize_t nobjs)
         // New object, check if freezable
         SUCCEEDS(check_freezable(imm_state, item, &freeze_state));
 
+        // Call the pre-freeze hook if one is present
+        SUCCEEDS(check_pre_freeze_hook(imm_state, item));
+
+        // Pre-freeze hooks can force a restart of freezing.
+        // We only restart if the pre-freeze hook succeeds.
+        if (freeze_state.restart) {
+            goto restart;
+        }
+
+        // If the pre-freeze hook turned the object immutable, we want to skip it.
+        if (_Py_IsImmutable(item)) {
+            continue;
+        }
+
         // Add to visited before putting in internal datastructures, so don't have
         // to account of internal RC manipulations.
         add_visited(item, &freeze_state);
@@ -2022,42 +2372,21 @@ freeze_impl(PyObject *const *objs, Py_ssize_t nobjs)
         SUCCEEDS(traverse_freeze(item, &freeze_state));
     }
 
+    make_weakrefs_safe(&freeze_state);
     mark_all_frozen(&freeze_state);
 
     goto finally;
 
 error:
-    debug("Error during freeze, unfreezing all frozen objects\n");
-    while(PyList_Size(freeze_state.pending) != 0){
-        PyObject* item = pop(freeze_state.pending);
-        if(item == NULL){
-            return -1;
-        }
-        unfreeze(item);
-    }
-    // Unfreeze completed SCCs via intrusive linked list.
-    {
-        PyObject *scc = freeze_state.completed_sccs;
-        while (scc != NULL) {
-            // Read next link before rollback clears _gc_prev.
-            PyObject *next = scc_parent(scc);
-            if (scc_next(scc) == NULL) {
-                // Single-member SCC: just clear flags and return to GC.
-                _Py_CLEAR_IMMUTABLE(scc);
-                return_to_gc(scc);
-            } else {
-                rollback_completed_scc(scc);
-            }
-            scc = next;
-        }
-        freeze_state.completed_sccs = NULL;
-    }
-    // Clear immutability flags on non-GC visited objects.
-    _Py_hashtable_foreach(freeze_state.visited,
-                          clear_immutable_visitor, NULL);
+    debug("Error during freeze\n");
+    undo_freeze(&freeze_state);
     result = -1;
 
 finally:
+    if (imm_state) {
+        imm_state->freeze_stack = freeze_state.enclosing;
+    }
+    debug("freeze_impl end. State ptr: %p\n\n", &freeze_state);
     deallocate_FreezeState(&freeze_state);
     TRACE_MERMAID_END();
     return result;

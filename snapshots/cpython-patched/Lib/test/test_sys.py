@@ -1782,7 +1782,7 @@ class SizeofTest(unittest.TestCase):
         check((1,2,3), vsize('') + self.P + 3*self.P)
         # type
         # static type: PyTypeObject
-        fmt = 'P2nPI13Pl4Pn9Pn12PIPcP'
+        fmt = 'P2nPI13Pl4Pn9Pn12PIPcPP'
         s = vsize(fmt)
         check(int, s)
         typeid = 'n' if support.Py_GIL_DISABLED else ''
@@ -1843,9 +1843,9 @@ class SizeofTest(unittest.TestCase):
         # weakref
         import weakref
         if support.Py_GIL_DISABLED:
-            expected = size('2Pn4P')
+            expected = size('2Pln4P')
         else:
-            expected = size('2Pn3P')
+            expected = size('2Pln3P')
         check(weakref.ref(int), expected)
         # weakproxy
         # XXX

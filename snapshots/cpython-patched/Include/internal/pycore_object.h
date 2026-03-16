@@ -813,6 +813,7 @@ _Py_TryIncref(PyObject *op)
 #ifdef Py_GIL_DISABLED
     return _Py_TryIncrefFast(op) || _Py_TryIncRefShared(op);
 #else
+    assert(!_Py_IsImmutable(op) && "Use _Py_TryIncref_Immutable for immutable objects");
     if (Py_REFCNT(op) > 0) {
         Py_INCREF(op);
         return 1;
@@ -820,6 +821,9 @@ _Py_TryIncref(PyObject *op)
     return 0;
 #endif
 }
+
+int _Py_TryIncref_Immutable(PyObject *op);
+int _Py_IsDead_Immutable(PyObject *op);
 
 // Enqueue an object to be freed possibly after some delay
 #ifdef Py_GIL_DISABLED
@@ -1110,6 +1114,16 @@ static inline Py_ALWAYS_INLINE void _Py_INCREF_MORTAL(PyObject *op)
 /* Utility for the tp_traverse slot of mutable heap types that have no other
  * references. */
 PyAPI_FUNC(int) _PyObject_VisitType(PyObject *op, visitproc visit, void *arg);
+
+/**
+ * Visits the type without verifying that it's a heap type
+ */
+PyAPI_FUNC(int) _PyObject_ReachableVisitType(PyObject *op, visitproc visit, void *arg);
+
+/**
+ * Visits the type without verifying that it's a heap type
+ */
+PyAPI_FUNC(int) _PyObject_ReachableVisitTypeAndTraverse(PyObject *op, visitproc visit, void *arg);
 
 #ifdef __cplusplus
 }

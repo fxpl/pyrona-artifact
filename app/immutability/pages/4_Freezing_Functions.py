@@ -31,7 +31,7 @@ This is a recreation of Figure 9 from the paper.
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen
+from immutable import freeze, is_frozen
 
 x = [1, 2]
 y = [4, 5]
@@ -48,17 +48,17 @@ print(f"`y` accessed via `read_x`: {read_x.__globals__["y"]}")
 
 # Freezing `read_x` propagates to `x`
 freeze(read_x)
-print(f"is read_x frozen? {isfrozen(read_x)}")
-print(f"is x frozen? {isfrozen(x)}")
+print(f"is read_x frozen? {is_frozen(read_x)}")
+print(f"is x frozen? {is_frozen(x)}")
 
 # `read_x` can be used to access global state
 print(f"frozen read_x(0) returns: {read_x(0)}")
 print(f"frozen read_x(1) returns: {read_x(1)}")
 
 # `y`, `mod_y` and `globals()` and remain mutable
-print(f"is y frozen? {isfrozen(y)}")
-print(f"is mod_y frozen? {isfrozen(y)}")
-print(f"is globals() frozen? {isfrozen(globals())}")
+print(f"is y frozen? {is_frozen(y)}")
+print(f"is mod_y frozen? {is_frozen(y)}")
+print(f"is globals() frozen? {is_frozen(globals())}")
 """,
 "functions-1")
 
@@ -72,7 +72,7 @@ This recreates Figure 11 from the paper:
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen
+from immutable import freeze, is_frozen
 
 x = [1, 2, 3]
 def tally():
@@ -103,7 +103,7 @@ This recreates Figure 12 from the paper:
 
 util.editable_python_block(\
 """
-from immutable import freeze, isfrozen
+from immutable import freeze, is_frozen
 
 def outer():
     x = 0

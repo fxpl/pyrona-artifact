@@ -20,20 +20,20 @@ of themselves. Their types or other objects they reference may still be mutable.
 
 In section "5.3 Immutable By Construction For C-Types" we propose that
 shallow immutable objects are automatically frozen if all contained
-objects are immutable and a program observes the mutability via `isfrozen()`.
+objects are immutable and a program observes the mutability via `is_frozen()`.
 
 Take this basic example that checks the freezability of different objects:
 """)
 
 util.editable_python_block(\
 """
-from immutable import isfrozen
+from immutable import is_frozen
 
 print(f"Type of Object  Is it frozen? ")
-print(f"Strings:        {isfrozen('A cool string')}")
-print(f"Integers:       {isfrozen(1999)}")
-print(f"None:           {isfrozen(None)}")
-print(f"Booleans:       {isfrozen(True)}")
+print(f"Strings:        {is_frozen('A cool string')}")
+print(f"Integers:       {is_frozen(1999)}")
+print(f"None:           {is_frozen(None)}")
+print(f"Booleans:       {is_frozen(True)}")
 """,
 "shallow-base")
 
@@ -49,11 +49,11 @@ This example shows this behavior with tuples:
 
 util.editable_python_block(\
 """
-from immutable import isfrozen
+from immutable import is_frozen
 
 print(f"Type of Object    Is it frozen? ")
-print(f"Tuple of ints:    {isfrozen((1, 2))}")
-print(f"Tuple of strings: {isfrozen(('a', 'b'))}")
-print(f"Tuple of dicts:   {isfrozen(({}, {}))}")
+print(f"Tuple of ints:    {is_frozen((1, 2))}")
+print(f"Tuple of strings: {is_frozen(('a', 'b'))}")
+print(f"Tuple of dicts:   {is_frozen(({}, {}))}")
 """,
 "shallow-containers")

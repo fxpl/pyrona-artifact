@@ -64,7 +64,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--output",
-        default=os.path.join(experiment_dir, "results/scaling_graph.png"),
+        default=os.path.join(experiment_dir, "results/scaling_graph.pdf"),
         help="Path to output plot image",
     )
     args = parser.parse_args()

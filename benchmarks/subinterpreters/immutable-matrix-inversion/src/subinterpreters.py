@@ -57,13 +57,13 @@ def main():
                for _ in range(num_batches)]
 
     if args.freeze:
-        from immutable import freeze, isfrozen
+        from immutable import freeze, is_frozen
         freeze(Matrix)
         for b in batches:
             freeze(b)
 
-        assert isfrozen(batches[0])
-        assert isfrozen(batches[0][0])
+        assert is_frozen(batches[0])
+        assert is_frozen(batches[0][0])
 
     with open(os.path.join(os.path.dirname(__file__), "subinterpreters_worker.py")) as file:
         worker_script = file.read()
