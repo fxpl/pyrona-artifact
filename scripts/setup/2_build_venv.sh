@@ -43,18 +43,18 @@ build_snapshot_venv() {
     local label="$1"
     local python_bin="$2"
     local venv_dir="$3"
-    local project="$4"
+    local project_dir="$4"
 
     echo "[info] creating $label venv in: $venv_dir"
     uv venv --python "$python_bin" --clear "$venv_dir"
 
-    echo "[info] syncing $label venv from lockfile"
-    UV_PROJECT_ENVIRONMENT="$venv_dir" uv --project "$project" sync --python "$python_bin" $FROZEN_FLAG --all-packages
+    echo "[info] syncing $label venv from lockfile at $project_dir"
+    UV_PROJECT_ENVIRONMENT="$venv_dir" uv --project "$project_dir" sync --python "$python_bin" $FROZEN_FLAG --all-packages
 }
 
-build_snapshot_venv "baseline" "$BASELINE_PYTHON_BIN" "$BASELINE_PYTHON_ENV" "./uv/snapshots/pyproject.toml"
-build_snapshot_venv "patched"  "$PATCHED_PYTHON_BIN"  "$PATCHED_PYTHON_ENV"  "./uv/snapshots/pyproject.toml"
-build_snapshot_venv "3.14.3"   "3.14.3"               "$STABLE_PYTHON_ENV"   "./uv/stable/pyproject.toml"
+build_snapshot_venv "baseline" "$BASELINE_PYTHON_BIN" "$BASELINE_PYTHON_ENV" "./uv/snapshots/"
+build_snapshot_venv "patched"  "$PATCHED_PYTHON_BIN"  "$PATCHED_PYTHON_ENV"  "./uv/snapshots/"
+build_snapshot_venv "3.14.3"   "3.14.3"               "$STABLE_PYTHON_ENV"   "./uv/stable/"
 
 [ -f "$BASELINE_PYTHON_ENV_ACTIVATE" ] || die "baseline activate script not found: $BASELINE_PYTHON_ENV_ACTIVATE"
 [ -f "$PATCHED_PYTHON_ENV_ACTIVATE" ]  || die "patched activate script not found: $PATCHED_PYTHON_ENV_ACTIVATE"
