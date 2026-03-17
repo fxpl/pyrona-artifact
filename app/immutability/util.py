@@ -315,7 +315,7 @@ def editable_bash_block(
 def make_pdf_display_callback(
     pdf_path: str,
     label: str = "Generated Plot",
-    viewer_height: int = 650,
+    viewer_height: int = "stretch",
 ) -> Callable[[str, dict], None]:
     """Return a callback that shows a button to display a PDF when it exists."""
 

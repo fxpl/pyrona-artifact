@@ -201,7 +201,8 @@ def build_guide_text(entries: list[Entry]) -> str:
         lines.append("")
 
         for item in grouped.get(section, []):
-            lines.append(f"- {item.text}: [./{item.path}#{item.line}](./{item.path}#{item.line})")
+            lines.append(f"- {item.text}:")
+            lines.append(f"    - [./{item.path} Line {item.line}](./{item.path}#L{item.line})")
 
         lines.append("")
 

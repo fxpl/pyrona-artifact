@@ -15,7 +15,7 @@ st.markdown(\
 A lot of Python code relies on mutable state. When talking to the
 community, a common concern was that objects could be turned immutable
 under foot. Our design proposes a notion of freezability as described
-in section "5 Freezability".
+in Section "5 Freezability".
 
 The `set_freezable(obj, freezability)` function takes an object and
 a freezability status. The main values are:
@@ -47,7 +47,7 @@ print(f"is x frozen? {is_frozen(x)}")
 try:
     freeze(y)
 except TypeError as exc:
-    print(f"freeze(y) failed: {type(exc).__name__}")
+    print(f"freeze(y) failed as expected: {exc}")
 
 # y is still mutable
 print(f"is y frozen? {is_frozen(y)}")
@@ -79,7 +79,7 @@ set_freezable(y, FREEZABLE_NO)
 try:
     freeze(items)
 except TypeError as exc:
-    print(f"freeze(items) failed: {type(exc).__name__}")
+    print(f"freeze(items) failed as expected: {exc}")
 
 # All objects should still be mutable:
 print(f"is items frozen? {is_frozen(items)}")
@@ -124,7 +124,7 @@ set_freezable(y, FREEZABLE_EXPLICIT)
 try:
     freeze(items)
 except TypeError as exc:
-    print(f"freeze(items) failed: {type(exc).__name__}")
+    print(f"freeze(items) failed as expected: {exc}")
 
 # y is still mutable
 y["mutate"] = True

@@ -21,7 +21,7 @@ in two common ways:
     defining module
 - Functions can capture state from the enclosing scope.
 
-This section shows how we handle function object as described in section
+This section shows how we handle function object as described in Section
 "4.3 Python’s Reliance of Mutable Global State" of the paper.
 
 ### Figure 9: Only Freeze Reachable Global State

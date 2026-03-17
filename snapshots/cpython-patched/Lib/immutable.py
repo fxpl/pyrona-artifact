@@ -17,6 +17,8 @@ FREEZABLE_YES = _c.FREEZABLE_YES
 FREEZABLE_NO = _c.FREEZABLE_NO
 FREEZABLE_EXPLICIT = _c.FREEZABLE_EXPLICIT
 FREEZABLE_PROXY = _c.FREEZABLE_PROXY
+InterpreterLocal = _c.InterpreterLocal
+SharedField = _c.SharedField
 
 # FIXME(immutable): For the longest time we used the name `isfrozen`
 # without the underscore. This keeps the function name for now, but
@@ -58,6 +60,8 @@ __all__ = [
     "FREEZABLE_NO",
     "FREEZABLE_EXPLICIT",
     "FREEZABLE_PROXY",
+    "InterpreterLocal",
+    "SharedField",
     "freezable",
     "unfreezable",
     "explicitlyFreezable",

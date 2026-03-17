@@ -10,9 +10,11 @@ In this artifact we want to show our working implementation of the
 proposed design. We claim that this implementation is:
 - functional: We provide a working Python interpreter that implements deep immutability.
 - reusable: Our patched version of CPython can be reused, as a baseline for further
-    research exploring the design space. We also include a snapshot of our modified
-    CPython version. This can be used as a reference how the described freezing
-    algorithm can be implemented.
+    research exploring the design space. It include a snapshot of our modified
+    CPython version with all implementation details, including the reversible SCC
+    algorithm described in Section 7, atomic reference counting and inserted write
+    barriers. This artifact can be used as a reference for developers wanting to
+    implement immutability in their language or other Python runtimes.
 
 ## Artifact Information
 

@@ -94,6 +94,8 @@ util.editable_bash_block(
         "benchmarks/pyperformance/results/results.pdf",
     ),
 )
+with st.expander("Figure ? from the Paper", expanded=False):
+    st.pdf("app/immutability/figures/fxx_pyperformance.pdf", height="stretch")
 
 st.markdown(\
 """
@@ -120,6 +122,9 @@ The execution may take up to 5 minutes.
 """)
 util.editable_bash_block("""benchmarks/pickling-vs-freeze/run.sh""", "bench-pickle", output_lines=25)
 
+with st.expander("Table 2 from the Paper", expanded=False):
+    st.pdf("app/immutability/figures/t02_freeze-vs-pickle.pdf")
+
 st.markdown(\
 """
 ### Direct Sharing Across Sub-interpreters
@@ -142,3 +147,6 @@ util.editable_bash_block(
         "benchmarks/subinterpreters/immutable-matrix-inversion/results/scaling_graph.pdf",
     ),
 )
+
+with st.expander("Figure 21 from the Paper", expanded=False):
+    st.pdf("app/immutability/figures/f21_sub-interpreters.pdf", height="stretch")

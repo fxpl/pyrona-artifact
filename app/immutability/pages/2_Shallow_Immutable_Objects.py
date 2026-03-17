@@ -12,13 +12,13 @@ st.title("Shallow Immutability")
 st.markdown(\
 """
 Python already has a several objects that are immutable after construction.
-As described in section "2.1 Support for Immutability in Python" and 
+As described in Section "2.1 Support for Immutability in Python" and 
 "3.2 Immutability by Construction" of the paper. Prominent examples
 are `bool`, `int`, `float` and `str`. In our implementation we
 call these objects "shallow immutable" since they only enforce immutability
 of themselves. Their types or other objects they reference may still be mutable.
 
-In section "5.3 Immutable By Construction For C-Types" we propose that
+In Section "5.3 Immutable By Construction For C-Types" we propose that
 shallow immutable objects are automatically frozen if all contained
 objects are immutable and a program observes the mutability via `is_frozen()`.
 
