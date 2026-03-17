@@ -174,6 +174,10 @@ int init_state(struct _Py_immutability_state *state)
             return -1;
         }
     }
+
+    if (_PyImmutability_SetFreezable((PyObject*)&PyModule_Type, _Py_FREEZABLE_PROXY)) {
+        return -1;
+    }
     return 0;
 }
 
@@ -245,6 +249,7 @@ static PyObject* pop(PyObject* s){
 
 
 
+// Artifact[Implementation]: Explanation how a stack is used to implement the DFS based SCC algorithm
 /**
  * The DFS walk for SCC calculations needs to perform actions on both
  * the pre-order and post-order visits to an object.  To achieve this
@@ -290,6 +295,7 @@ static bool is_c_wrapper(PyObject* obj){
     return PyCFunction_Check(obj) || Py_IS_TYPE(obj, &_PyMethodWrapper_Type) || Py_IS_TYPE(obj, &PyWrapperDescr_Type);
 }
 
+// Artifact[Implementation]: The state used to track a single freeze call and construct SCCs
 /**
  * Used to track the state of an in progress freeze operation.
  *
@@ -1468,8 +1474,8 @@ static int check_freezable(struct _Py_immutability_state *state, PyObject* obj,
             }
             goto error;
         case _Py_FREEZABLE_PROXY:
-            // Reserved for future use — fall through to existing checks.
-            break;
+            assert(PyModule_Check(obj) || obj == _PyObject_CAST(&PyModule_Type));
+            return 0;
         }
     }
 
@@ -1496,7 +1502,9 @@ int _PyImmutability_SetFreezable(PyObject *obj, _Py_freezable_status status)
         return -1;
     }
 
-    if (status == _Py_FREEZABLE_PROXY && !PyModule_Check(obj)) {
+    if (status == _Py_FREEZABLE_PROXY
+        && !(PyModule_Check(obj) || obj == _PyObject_CAST(&PyModule_Type))
+    ) {
         PyErr_SetString(PyExc_TypeError,
                         "FREEZABLE_PROXY can only be set on module objects");
         return -1;
@@ -1546,6 +1554,47 @@ int _PyImmutability_SetFreezable(PyObject *obj, _Py_freezable_status status)
                     "support and ob_flags fallback is not available on 32-bit");
     return -1;
 #endif
+}
+
+
+int _PyImmutability_UnsetFreezable(PyObject *obj)
+{
+    // Try deleting the __freezable__ attribute.
+    int rc = PyObject_SetAttr(obj, &_Py_ID(__freezable__), NULL);
+    if (rc == 0) {
+        goto clear_flags;
+    }
+
+    // If deletion failed with AttributeError/TypeError, the object
+    // doesn't support attributes — fall through to ob_flags.
+    if (PyErr_ExceptionMatches(PyExc_AttributeError) ||
+        PyErr_ExceptionMatches(PyExc_TypeError))
+    {
+        PyErr_Clear();
+    }
+    else {
+        return -1;
+    }
+
+    // The object doesn't support attributes; need ob_flags to clear.
+#if SIZEOF_VOID_P <= 4
+    // 32-bit builds do not have ob_flags for freezable status.
+    assert(0 && "unset_freezable ob_flags fallback not supported on 32-bit");
+    PyErr_SetString(PyExc_TypeError,
+                    "Cannot unset freezable status: object has no attribute "
+                    "support and ob_flags fallback is not available on 32-bit");
+    return -1;
+#endif
+
+clear_flags:
+#if SIZEOF_VOID_P > 4
+    {
+        uint16_t flags = obj->ob_flags;
+        flags &= ~(_Py_FREEZABLE_SET_FLAG | _Py_FREEZABLE_STATUS_MASK);
+        obj->ob_flags = flags;
+    }
+#endif
+    return 0;
 }
 
 
@@ -1974,6 +2023,7 @@ static void make_weakrefs_safe(struct FreezeState* freeze_state)
 
 /* This undoes a freeze belonging to the given state */
 static void undo_freeze(struct FreezeState* state) {
+    // Artifact[Implementation]: The function that rolls back immutability on failure
     debug("Unfreezing all frozen objects belonging to %p\n", state);
 
     // Clear dfs stack
@@ -2196,6 +2246,15 @@ late_init(struct _Py_immutability_state *state)
 static int
 freeze_impl(PyObject *const *objs, Py_ssize_t nobjs)
 {
+    // Artifact[Implementation]: The entry point to the `freeze()` function in C
+    //
+    // This is the central function to the freeze algorithm that handles
+    // DFS traversal and calls into other functions to:
+    // - Checking freezability
+    // - Checking and calling the pre-freeze hook
+    // - Construct SCCs
+    // - Handle failures
+    // - Remove objects from the GC list
     struct _Py_immutability_state* imm_state = NULL;
     int result = 0;
     TRACE_MERMAID_START();
