@@ -61,7 +61,7 @@ RUN scripts/setup/3_pyperformance_setup.sh
 RUN scripts/smoketest.sh --minimal
 
 EXPOSE 8501
-ENTRYPOINT ["/bin/bash","-lc","source \"$STABLE_PYTHON_ENV_ACTIVATE\" && python -m streamlit run app/immutability/artifact.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true"]
+ENTRYPOINT ["/bin/bash","-lc","source \"$STABLE_PYTHON_ENV_ACTIVATE\" && python -m streamlit run app/immutability/Artifact.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true"]
 
 # ENV SHELL=/bin/bash
 # CMD ["/bin/bash", "-lc", "exec /bin/bash"]

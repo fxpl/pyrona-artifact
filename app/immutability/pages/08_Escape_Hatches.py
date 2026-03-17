@@ -29,8 +29,9 @@ The value itself must remain freezable/immutable.
 
 util.editable_python_block(\
 """
-from immutable import freeze, is_frozen, SharedField
+from immutable import freeze, is_frozen, freezable, SharedField
 
+@freezable
 class Counter:
     # Shared mutable location, but only immutable values can be stored
     count = SharedField(0)
@@ -68,8 +69,9 @@ st.markdown(\
 
 util.editable_python_block(\
 """
-from immutable import freeze, is_frozen, InterpreterLocal
+from immutable import freeze, is_frozen, freezable, InterpreterLocal
 
+@freezable
 class SessionState:
     def __init__(self):
         # A fresh list is created lazily per interpreter

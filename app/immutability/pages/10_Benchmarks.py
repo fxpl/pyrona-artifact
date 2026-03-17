@@ -85,6 +85,9 @@ For this artifact, we've disabled the `2to3` benchmark visible in the paper
 figure, since it requires external dependencies that are not available in the
 Docker container. We've also disabled the `fastapi` benchmark since it is not
 compatible with our baseline Python version.
+
+This plot was not part of the initial submission but was requested and will be
+added in the final version of the paper.
 """)
 
 util.editable_bash_block(

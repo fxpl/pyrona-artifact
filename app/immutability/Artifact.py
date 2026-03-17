@@ -43,8 +43,9 @@ st.markdown(\
 ### Minimal Smoke Test
 
 You can click the "Run" button in the corner to run a minimal smoke test.
+
 This minimal version checks that our patched Python version and all scripts
-seem to be work as expected.
+are available and seem to be work as expected.
 """)
 
 util.editable_bash_block("scripts/smoketest.sh --minimal", "smoketest-minimal")

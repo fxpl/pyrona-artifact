@@ -214,7 +214,7 @@ def _run_command_worker(commands: list[str], state: dict, cwd: str = ".") -> Non
 def _render_command_panel(
     title: str,
     run_id: str,
-    output_lines: int = 10,
+    output_lines: int,
     on_finished: Callable[[str, dict], None] | None = None,
 ) -> None:
     state = _get_command_state(run_id)
@@ -250,7 +250,7 @@ def _render_command_panel(
 def _render_command_panel_fragment(
     title: str,
     run_id: str,
-    output_lines: int = 10,
+    output_lines: int,
     on_finished: Callable[[str, dict], None] | None = None,
 ) -> None:
     _render_command_panel(title, run_id, output_lines, on_finished=on_finished)
@@ -302,7 +302,7 @@ def run_command(
 def editable_bash_block(
     code: str,
     run_id: str,
-    output_lines: int = 10,
+    output_lines: int = 20,
     on_finished: Callable[[str, dict], None] | None = None,
 ) -> None:
     # create info bar dictionary
@@ -348,7 +348,7 @@ def _trim_outer_empty_lines(text: str) -> str:
         lines = lines[:-1]
     return "\n".join(lines)
 
-def editable_python_block(code:str, run_id: str, python_env=PATCHED_PYTHON_BIN, output_lines=10) -> None:
+def editable_python_block(code:str, run_id: str, python_env=PATCHED_PYTHON_BIN, output_lines=20) -> None:
     code = _trim_outer_empty_lines(code)
     # create info bar dictionary
     response_dict = code_editor(code, lang="python", buttons=_CODE_BLOCK_BUTTONS, info=_CODE_BLOCK_INFO_BAR_PYTHON)

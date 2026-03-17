@@ -82,13 +82,20 @@ obj = (1, 2, 3)
 
 # This `obj` is still "mutable" until its immutability is observed. Sending
 # it right now will result in different IDs being printed
+print("-------- mutable serialisation ---------")
+print(f"Sending {hex(id(obj))}")
 interp.run_func(sub1, sub_program, shared={"input": obj})
+print(f"Sending {hex(id(obj))}")
 interp.run_func(sub2, sub_program, shared={"input": obj})
 
 # Freezing it allows the object to be shared without pickling.
 # The IDs are now the same, since it's the same object:
 freeze(obj)
+
+print("-------- immutable sharing ---------")
+print(f"Sending {hex(id(obj))}")
 interp.run_func(sub1, sub_program, shared={"input": obj})
+print(f"Sending {hex(id(obj))}")
 interp.run_func(sub2, sub_program, shared={"input": obj})
 
 # Clean up the interpreter

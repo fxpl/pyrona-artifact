@@ -64,9 +64,6 @@ print(f"is globals() frozen? {is_frozen(globals())}")
 st.markdown(\
 """
 ### Figure 11: Freezing locks captured state
-
-This recreates Figure 11 from the paper:
-
 """)
 
 util.editable_python_block(\
@@ -95,9 +92,6 @@ print(f"tally() returns: {tally()}")
 st.markdown(\
 """
 ### Figure 12: State Captured From Enclosing Context
-
-This recreates Figure 12 from the paper:
-
 """)
 
 util.editable_python_block(\

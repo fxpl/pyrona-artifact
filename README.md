@@ -128,7 +128,7 @@ You can start the website locally using this command:
 
 ```bash
 source "$STABLE_PYTHON_ENV_ACTIVATE"
-python -m streamlit run app/immutability/artifact.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true
+python -m streamlit run app/immutability/Artifact.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true
 deactivate
 ```
 
