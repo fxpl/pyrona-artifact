@@ -11,7 +11,7 @@ st.title("Shallow Immutability")
 
 st.markdown(\
 """
-Python already has a several objects that are immutable after construction.
+Python already has several objects that are immutable after construction.
 As described in Section "2.1 Support for Immutability in Python" and 
 "3.2 Immutability by Construction" of the paper. Prominent examples
 are `bool`, `int`, `float` and `str`. In our implementation we

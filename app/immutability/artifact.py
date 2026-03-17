@@ -43,6 +43,8 @@ st.markdown(\
 ### Minimal Smoke Test
 
 You can click the "Run" button in the corner to run a minimal smoke test.
+This minimal version checks that our patched Python version and all scripts
+seem to be work as expected.
 """)
 
 util.editable_bash_block("scripts/smoketest.sh --minimal", "smoketest-minimal")
@@ -55,6 +57,9 @@ st.markdown(\
 You can click the "Run" button in the corner to run a full smoke test. This
 may take up to 10 minutes.
 
+This full version includes all checks from the minimum smoke test. Additionally
+it runs the full CPython test-suite of our patched CPython and a trial run of
+pyperformance. The entire artifact is in a good state, if this passes.
 """)
 
 util.editable_bash_block("scripts/smoketest.sh", "smoketest")

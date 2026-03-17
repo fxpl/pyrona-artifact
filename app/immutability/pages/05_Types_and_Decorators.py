@@ -12,7 +12,7 @@ st.title(title)
 
 st.markdown(\
 """
-Python represents types as mutable type object. This poses several challenges for
+Python represents types as mutable type objects. This poses several challenges for
 immutability as described in Section "4.2 Shared Mutable Type Objects". Our design
 allows types to be mutable until they are frozen.
 
@@ -21,7 +21,7 @@ we introduce decorators to adjust the mutability and freezability directly after
 
 ### `@frozen`
 
-The `@frozen` decorator freezes a class directly after construction
+The `@frozen` decorator freezes a class directly after construction.
 """)
 
 util.editable_python_block(\
@@ -60,7 +60,7 @@ B.field = "B is mutable"
 b = B()
 freeze(b)
 
-# B and the instance of B is now frozen
+# B and the instance of B are now frozen
 print(f"Is b frozen? {is_frozen(b)}")
 print(f"Is B frozen? {is_frozen(B)}")
 """,
@@ -68,9 +68,9 @@ print(f"Is B frozen? {is_frozen(B)}")
 
 st.markdown(\
 """
-### `@unfreeze`
+### `@unfreezable`
 
-The `@unfreeze` decorator makes a class and all instances unfreezable
+The `@unfreezable` decorator makes a class and all instances unfreezable.
 """)
 
 util.editable_python_block(\
@@ -107,7 +107,7 @@ The `@explicitlyFreezable` decorator makes a class and all instances explicitly 
 
 util.editable_python_block(\
 """
-from immutable import freeze, frozen, explicitlyFreezable, is_frozen
+from immutable import freeze, explicitlyFreezable, is_frozen
 
 @explicitlyFreezable
 class D:

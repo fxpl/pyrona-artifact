@@ -17,16 +17,15 @@ the unstable `_interpreters` module.
 
 ### Creating a Sub-Interpreter:
 
-Sub-interpreters take their Python program as a string. The shared argument of
-`interp.run_string` can be used to pass arguments to the interpreter. By default
-these are pickled and unpickled. This works great for strings
+Sub-interpreters accept functions as arguments. CPython internally takes
+the source representation of the function and sends it to the receiving interpreter.
 """)
 
 util.editable_python_block(\
 '''
 import _interpreters as interp
 
-# Define a function that will be pickled and send to the sub-interpreter
+# Define a function that will be pickled and sent to the sub-interpreter
 def sub_program():
     # Interpreters need to import modules again
     import _interpreters as interp
@@ -53,7 +52,7 @@ st.markdown(\
 ### Sharing Objects
 
 Sub-interpreters in stable Python can take arguments by setting the
-`shared` argument of `run_func`. These are then pickled send to the
+`shared` argument of `run_func`. These are then pickled and sent to the
 other interpreter and unpickled. Our design for immutable objects
 enables safe sharing of these objects across sub-interpreters:
 """)
@@ -77,16 +76,16 @@ sub1 = interp.create()
 sub2 = interp.create()
 print(f"Created new sub-interpreters: {sub1, sub2}")
 
-# shared can only take a very limited range of types, basically only
-# types we defined as shallow-immutable.
+# `shared` can only take a very limited range of types, mainly
+# types we define as shallow immutable.
 obj = (1, 2, 3)
 
-# This `obj` is "mutable" until the immutability is observed. Sending
+# This `obj` is still "mutable" until its immutability is observed. Sending
 # it right now will result in different IDs being printed
 interp.run_func(sub1, sub_program, shared={"input": obj})
 interp.run_func(sub2, sub_program, shared={"input": obj})
 
-# Freezing it, allows the object to be shared, without pickling it.
+# Freezing it allows the object to be shared without pickling.
 # The IDs are now the same, since it's the same object:
 freeze(obj)
 interp.run_func(sub1, sub_program, shared={"input": obj})
@@ -102,10 +101,9 @@ st.markdown(\
 """
 ### Shared Objects and Shared Fields
 
-Sub-interpreters in stable Python can take arguments by setting the
-`shared` argument of `run_func`. These are then pickled send to the
-other interpreter and unpickled. Our design for immutable objects
-enables safe sharing of these objects across sub-interpreters:
+This section demonstrates that immutability allows the sharing
+of complex objects like dicts and that `SharedField` objects
+can be used to communicate across sub-interpreters:
 """)
 
 util.editable_python_block(\
@@ -115,21 +113,21 @@ import _interpreters as interp
 from immutable import freeze, is_frozen, SharedField
 from time import sleep
 
-# Create a shared field
-running = SharedField(True)
-freeze(running)
+# Create a dict to be shared.
+input = {"running": SharedField(True)}
+# The following line is needed as dictionaries can't be shared normally
+freeze(input)
 
 # Define a function to run on the interpreter
 def sub_program():
     # Get the current interpreter ID
     import _interpreters as interp
     ip_id = interp.get_current()[0]
-    # The `id` function returns the memory address of the object.
-    print(f"IP {ip_id}: Started and is waiting on {running}")
+    print(f"IP {ip_id}: Started and is waiting on {input['running']}")
 
-    # This uses a shared-field as a spin-lock
+    # This uses a shared field as a spin-lock
     counter = 0
-    while running.get():
+    while input['running'].get():
         counter += 1
 
     print(f"IP {ip_id}: Counted until {counter}")
@@ -138,7 +136,7 @@ def sub_program():
 # threads to allow sub-interpreters to run in parallel
 def spawn_sub():
     sub = interp.create()
-    interp.run_func(sub, sub_program, shared={"running": running})
+    interp.run_func(sub, sub_program, shared={"input": input})
     interp.destroy(sub)
 
 # This spawns a given number of sub-interpreters
@@ -150,7 +148,7 @@ for _ in range(4):
 
 sleep(1)
 # Send the stop signal to sub-interpreters
-running.set(False)
+input['running'].set(False)
 
 # Wait until all interpreters are done
 for s in subs:

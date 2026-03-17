@@ -12,7 +12,7 @@ st.title(title)
 
 st.markdown(\
 """
-Functions in Python code are turned into function object. These are used
+Functions in Python code are turned into function objects. These are used
 everywhere in Python and our immutability design needs to handle them.
 Newly constructed objects or received arguments can be mutable without
 a problem. However, every function also captures mutable state, usually
@@ -21,12 +21,11 @@ in two common ways:
     defining module
 - Functions can capture state from the enclosing scope.
 
-This section shows how we handle function object as described in Section
+This section shows how we handle function objects as described in Section
 "4.3 Python’s Reliance of Mutable Global State" of the paper.
 
 ### Figure 9: Only Freeze Reachable Global State
 
-This is a recreation of Figure 9 from the paper.
 """)
 
 util.editable_python_block(\
@@ -55,9 +54,9 @@ print(f"is x frozen? {is_frozen(x)}")
 print(f"frozen read_x(0) returns: {read_x(0)}")
 print(f"frozen read_x(1) returns: {read_x(1)}")
 
-# `y`, `mod_y` and `globals()` and remain mutable
+# `y`, `mod_y`, and `globals()` remain mutable
 print(f"is y frozen? {is_frozen(y)}")
-print(f"is mod_y frozen? {is_frozen(y)}")
+print(f"is mod_y frozen? {is_frozen(mod_y)}")
 print(f"is globals() frozen? {is_frozen(globals())}")
 """,
 "functions-1")
@@ -88,7 +87,7 @@ print(f"tally() returns: {tally()}")
 # The outer scope can reassign `x`
 x = [1, 2]
 
-# A reassignment of x no-longer effects `tally()`:
+# A reassignment of x no longer affects `tally()`:
 print(f"tally() returns: {tally()}")
 """,
 "functions-2")

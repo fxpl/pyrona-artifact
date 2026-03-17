@@ -11,18 +11,18 @@ st.title("Benchmarks")
 
 st.markdown(\
 """
-This pages attempts to recreated the benchmarks shown in the paper.
+This page attempts to recreate the benchmarks shown in the paper.
 The GUIDE.md file in the artifact root has links to the scripts
 implementing these benchmarks.
 
-Note that this artifact runs the benchmarks in a docker container. It
+Note that this artifact runs the benchmarks in a Docker container. It
 is likely that this reproduction is less stable and may differ from
-a run outside a container. And other processes running on your machine
-during benchmarking may also effect the results.
+a run outside a container. Other processes running on your machine
+during benchmarking may also affect the results.
 
-During testing we noticed that some tests are OS and platform sensitive.
-For the paper we used a Ubuntu 22.04.5 LTS machine with 32-Cores and
-256 GB ram.
+During testing, we noticed that some tests are OS- and platform-sensitive.
+For the paper, we used an Ubuntu 22.04.5 LTS machine with 32 cores and
+256 GB RAM:
 """)
 
 with st.expander("Detailed CPU Specification", expanded=False):
@@ -74,16 +74,17 @@ The script has an optional `--mode` argument with the following options:
 
 - `single`:   Run a single iteration (For debugging)
 - `fast`:     Fast but rough answers
-- `default`:  Well the default
-- `rigorous`: Spend longer running tests to get more accurate resultsF
+- `default`:  The default configuration
+- `rigorous`: Spend longer running tests to get more accurate results
 
 This benchmark may take:
 - 60 minutes on normal mode
 - 20 minutes on fast mode
 
-PyPerformance sadly has no simple progress indicator besides the generated logs
-that are too big for this website. The logs are instead written to a log file
-in the docker container and can be inspected.
+For this artifact, we've disabled the `2to3` benchmark visible in the paper
+figure, since it requires external dependencies that are not available in the
+Docker container. We've also disabled the `fastapi` benchmark since it is not
+compatible with our baseline Python version.
 """)
 
 util.editable_bash_block(
@@ -102,7 +103,7 @@ st.markdown(\
 ### Running the Python Test Suite
 
 This microbenchmark runs the test suite of baseline and our patched
-python. By default it executes with multiple agents. We use the user
+Python. By default, it executes with multiple agents. We use the user
 time reported by the `time` command to get the used time across all
 cores.
 
@@ -115,7 +116,7 @@ st.markdown(\
 """
 ### Freezing vs. Pickling and Unpickling
 
-This microbenchmarks compares the time required to freeze 1'000'000 objects
+This microbenchmark compares the time required to freeze 1'000'000 objects
 with the time needed to pickle and unpickle them instead.
 
 The execution may take up to 5 minutes.

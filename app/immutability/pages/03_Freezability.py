@@ -14,11 +14,11 @@ st.markdown(\
 """
 A lot of Python code relies on mutable state. When talking to the
 community, a common concern was that objects could be turned immutable
-under foot. Our design proposes a notion of freezability as described
+underfoot. Our design proposes a notion of freezability as described
 in Section "5 Freezability".
 
 The `set_freezable(obj, freezability)` function takes an object and
-a freezability status. The main values are:
+a freezability value. The main values are:
 - `FREEZABLE_YES`: freezing allowed
 - `FREEZABLE_NO`: freezing denied
 - `FREEZABLE_EXPLICIT`: only direct `freeze(obj)` allowed
@@ -136,3 +136,39 @@ print(f"is items frozen? {is_frozen(items)}")
 print(f"is y frozen? {is_frozen(y)}")
 """,
 "freezability-explicit")
+
+st.markdown(\
+"""
+### Figure 17: "Protecting" against freezing
+
+The `require_mutable` context manager temporarily sets the freezability to
+`FREEZABLE_NO` and then resets it to the value on exit. This can be used to
+prevent called functions from freezing objects:
+""")
+
+util.editable_python_block(\
+"""
+from immutable import freeze, is_frozen, get_freezable, require_mutable
+
+def external_func(arg):
+    freeze(arg)
+
+obj = {}
+with require_mutable(obj):
+    print(f"Temporary Freezability: {get_freezable(obj)}")
+
+    # Calling freeze here or in a nested function will fail:
+    try:
+        freeze(obj)
+    except TypeError as exc:
+        print(f"freeze(obj) failed as expected: {exc}")
+
+print(f"Reset Freezability: {get_freezable(obj)}")
+
+# Freezing outside the context manager works:
+freeze(obj)
+
+# obj is now frozen
+print(f"Is obj frozen? {is_frozen(obj)}")
+""",
+"freezability-mutable-context")
