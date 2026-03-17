@@ -98,55 +98,62 @@ interp.destroy(sub2)
 ''',
 "subs-2")
 
-# FIXME: WHY IS `interp.run_func` BLOCKING??? MatJ
-# st.markdown(\
-# """
-# ### Shared Objects and Shared Fields
+st.markdown(\
+"""
+### Shared Objects and Shared Fields
 
-# Sub-interpreters in stable Python can take arguments by setting the
-# `shared` argument of `run_func`. These are then pickled send to the
-# other interpreter and unpickled. Our design for immutable objects
-# enables safe sharing of these objects across sub-interpreters:
-# """)
+Sub-interpreters in stable Python can take arguments by setting the
+`shared` argument of `run_func`. These are then pickled send to the
+other interpreter and unpickled. Our design for immutable objects
+enables safe sharing of these objects across sub-interpreters:
+""")
 
-# util.editable_python_block(\
-# '''
-# import _interpreters as interp
-# from immutable import freeze, is_frozen, SharedField
+util.editable_python_block(\
+'''
+import threading
+import _interpreters as interp
+from immutable import freeze, is_frozen, SharedField
+from time import sleep
 
-# # Define a function to run on the interpreter
-# def sub_program():
-#     # Get the current interpreter ID
-#     import _interpreters as interp
-#     ip_id = interp.get_current()[0]
-#     # The `id` function returns the memory address of the object.
-#     print(f"IP {ip_id}: Started")
-#     print(f"IP {ip_id}: Waiting on {input}")
+# Create a shared field
+running = SharedField(True)
+freeze(running)
 
-#     # This uses a shared-field as a spin-lock
-#     counter = 0
-#     while input.get():
-#         counter += 1
+# Define a function to run on the interpreter
+def sub_program():
+    # Get the current interpreter ID
+    import _interpreters as interp
+    ip_id = interp.get_current()[0]
+    # The `id` function returns the memory address of the object.
+    print(f"IP {ip_id}: Started and is waiting on {running}")
 
-#     print(f"IP {ip_id}: Counted until {counter}")
+    # This uses a shared-field as a spin-lock
+    counter = 0
+    while running.get():
+        counter += 1
 
-# # This creates a new interpreter
-# sub1 = interp.create()
-# sub2 = interp.create()
+    print(f"IP {ip_id}: Counted until {counter}")
 
-# # Create a shared field
-# obj = SharedField(True)
-# freeze(obj)
+# Sub-interpreter calls are blocking by default. We have to use
+# threads to allow sub-interpreters to run in parallel
+def spawn_sub():
+    sub = interp.create()
+    interp.run_func(sub, sub_program, shared={"running": running})
+    interp.destroy(sub)
 
-# # Have both sub-interpreters spin on obj
-# interp.run_func(sub1, sub_program, shared={"input": obj})
-# interp.run_func(sub2, sub_program, shared={"input": obj})
+# This spawns a given number of sub-interpreters
+subs = []
+for _ in range(4):
+    t = threading.Thread(target=spawn_sub)
+    t.start()
+    subs.append(t)
 
-# # Send the stop signal to sub-interpreters
-# obj.set(False)
+sleep(1)
+# Send the stop signal to sub-interpreters
+running.set(False)
 
-# # Clean up the interpreter
-# interp.destroy(sub1)
-# interp.destroy(sub2)
-# ''',
-# "subs-2")
+# Wait until all interpreters are done
+for s in subs:
+    s.join()
+''',
+"subs-3")
