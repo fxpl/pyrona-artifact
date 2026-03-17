@@ -4,16 +4,16 @@ requires-python = ">=3.14"
 
 [[package]]
 name = "bocpy"
-version = "0.2.1"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b2/e5/a2f8558424a77278abf0886ed3f225827f4330c6a15b08e99e15f2a866b0/bocpy-0.2.1.tar.gz", hash = "sha256:36b8cc09ba5b00c629e8a0424d004ea2f70607d2a97fa8a84a49a7cfadc652ff", size = 89880, upload-time = "2026-03-17T16:20:12.75Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/52/0f5afb3f625b478a330591cdbcf3a26790973e424fe97eb251215db67d19/bocpy-0.2.0.tar.gz", hash = "sha256:6cdff3b363c95ae1f31571462b8a35bd57e3ea3e82b1f9aea653cb2a5c170297", size = 89885, upload-time = "2026-03-04T11:32:32.702Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/be/76/53e14f0a00f37a49e4691e9e251f26c0172df6909313b27d54bac2b2e558/bocpy-0.2.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:6da6250a6202eb5c14c71c758ca709f605854519cc0f38aa0727eee97c6e2ee5", size = 110008, upload-time = "2026-03-17T16:20:06.01Z" },
-    { url = "https://files.pythonhosted.org/packages/60/69/0f569dd1119e01a7155fe2ec7bb11ec383ad387df0f6049ef9885f3610b1/bocpy-0.2.1-cp314-cp314-macosx_14_0_x86_64.whl", hash = "sha256:0f90208a9701e31253bbe09bbfb1c4aa53f90fbe6d446d70dd7f5131c8232f23", size = 114244, upload-time = "2026-03-17T16:20:06.971Z" },
-    { url = "https://files.pythonhosted.org/packages/e0/c2/371427c7f642a486dd3a4d14e69ab8acadd305cc3c3de18a8a4968d7bf5f/bocpy-0.2.1-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:cd3a61beed5e3c21a719a38c08f0267db9fc16d96795def7c513ae8e7a7311d2", size = 273152, upload-time = "2026-03-17T16:20:08.662Z" },
-    { url = "https://files.pythonhosted.org/packages/a1/f3/751ff7312d93af121b72f04583ed968ea9e9a7f4c20d9845a30df8ef19e2/bocpy-0.2.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:e97805f204e8a72359a94ddb3da8254723b92e79b2c7cd5e649dde43b3610b66", size = 270309, upload-time = "2026-03-17T16:20:09.598Z" },
-    { url = "https://files.pythonhosted.org/packages/4d/3a/e2503aaea98f7b9badd0e3d67dd482e4990fa424488ddd313c2229a52672/bocpy-0.2.1-cp314-cp314-win32.whl", hash = "sha256:fc80dea988d68fa89409a658105dfe87abcaeb7669465f1476cc322f9b6c0302", size = 109069, upload-time = "2026-03-17T16:20:10.569Z" },
-    { url = "https://files.pythonhosted.org/packages/15/6e/d6e257e043a12e7cce3cf13ecb4e7b5d8a4a8dee6deb9f14e7cf483f04a0/bocpy-0.2.1-cp314-cp314-win_amd64.whl", hash = "sha256:b123eff5b0ec7babea1ee039aced2b63a8d43c4a7e3dc5e018ab40f0b9253eaa", size = 111858, upload-time = "2026-03-17T16:20:11.81Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/6b/e294ba7003918416450240faa041c5f38cdc0630aa9fbfc8f603aea2e1ef/bocpy-0.2.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:7a05ab565ca34b41d1291d77f9a6506e84ac1b4a25b093d0ddfa4abfac86afe1", size = 109987, upload-time = "2026-03-04T11:32:25.825Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/f1/a1eeae12635a01af99fe89d168ed91a1192751f664f1e2186bde199cf022/bocpy-0.2.0-cp314-cp314-macosx_14_0_x86_64.whl", hash = "sha256:93f06cf72d9bf64535b439f1500b994cf359828600e4965574192d262a8ce393", size = 114236, upload-time = "2026-03-04T11:32:26.688Z" },
+    { url = "https://files.pythonhosted.org/packages/be/1a/dcdcaad72a4f70c8bb9328be824a36ddc4b21ace64e96ec21a17e67a255b/bocpy-0.2.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:468d0820463275b8a023edb676ae04c637212a48e2602165aa801a34d58f4d88", size = 273101, upload-time = "2026-03-04T11:32:27.694Z" },
+    { url = "https://files.pythonhosted.org/packages/94/b9/1ee7c2ddbdec8a5c2fc1be8cf8fa2330cba3088343b778f703237cd179d6/bocpy-0.2.0-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:64432bbddad95435d1e0b6abd86a7ae629163fbbdbc6e5c752dbcb57556f8400", size = 270300, upload-time = "2026-03-04T11:32:28.983Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/3d/ae861b0a18773d668cb44da7ef94dbe87160bb8e79b202e208132442f428/bocpy-0.2.0-cp314-cp314-win32.whl", hash = "sha256:463b4dc6569bad201ccc76a543ddf2d9569114efa8d423bc96568d11ffb07205", size = 108820, upload-time = "2026-03-04T11:32:29.94Z" },
+    { url = "https://files.pythonhosted.org/packages/67/fc/62d43a5a20aba27368ae3147ef2a50071376fb6585c9101086f416177cc7/bocpy-0.2.0-cp314-cp314-win_amd64.whl", hash = "sha256:8c4119a93b850dcd276f0fab798dcf6d40b3cbf320a6349cb2418f70e5bd182d", size = 111812, upload-time = "2026-03-04T11:32:31.676Z" },
 ]
 
 [[package]]
@@ -25,4 +25,4 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "bocpy", specifier = "==0.2.1" }]
+requires-dist = [{ name = "bocpy", specifier = "==0.2.0" }]

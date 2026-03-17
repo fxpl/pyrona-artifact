@@ -19,6 +19,22 @@ die() {
     exit 1
 }
 
+require_nonempty_output() {
+    local label="$1"
+    local output="$2"
+    if [ -z "${output//[[:space:]]/}" ]; then
+        die "$label produced empty output"
+    fi
+}
+
+require_valid_json_output() {
+    local label="$1"
+    local output="$2"
+    if ! printf '%s' "$output" | python -c 'import json, sys; json.load(sys.stdin)' >/dev/null; then
+        die "$label produced invalid JSON output"
+    fi
+}
+
 require_env() {
     local var_name="$1"
     if [ -z "${!var_name:-}" ]; then
@@ -109,9 +125,28 @@ run_baseline_single() {
             --num-trials "$NUM_TRIALS"
     )"
 
+    require_nonempty_output "baseline.py" "$output"
+    require_valid_json_output "baseline.py" "$output"
+
     deactivate
 
     echo "$output"
+}
+
+# There seems to be a memory leak in BocPy 0.2.0
+# BocPy 0.2.1 was supposed to fix this, but then we get other memory
+# corruption errors on ARM machines. So, we take 0.2.0, accept the
+# memory leak since it happens for both pickling and freezing tests.
+# This just filters out the warning, really not ideal, but no time
+# to fix it now.
+filter_subinterpreters_stderr() {
+    local line
+    while IFS= read -r line; do
+        if [[ "$line" == *"Recycling xidata created on interpeter 0 after the interpreter has shut down may result in cown leak."* ]]; then
+            continue
+        fi
+        echo "$line" >&2
+    done
 }
 
 run_subinterpreters_series() {
@@ -137,7 +172,13 @@ run_subinterpreters_series() {
 
         echo "[info] running subinterpreters: workers=$num_workers values=$num_values freeze=$with_freeze" >&2
         local output
-        output="$("${cmd[@]}")"
+        if ! output="$("${cmd[@]}" 2> >(filter_subinterpreters_stderr))"; then
+            deactivate
+            die "subinterpreters.py failed: workers=$num_workers values=$num_values freeze=$with_freeze"
+        fi
+
+        require_nonempty_output "subinterpreters.py" "$output"
+        require_valid_json_output "subinterpreters.py" "$output"
 
         if [ "$first" -eq 0 ]; then
             echo ","
@@ -171,6 +212,10 @@ EOF
 echo "[done] wrote benchmark results: $OUTPUT_PATH" >&2
 
 source "$STABLE_PYTHON_ENV_ACTIVATE"
+if ! python -c 'import json, sys; json.load(open(sys.argv[1], "r", encoding="utf-8"))' "$OUTPUT_PATH" >/dev/null; then
+    deactivate
+    die "results JSON is invalid: $OUTPUT_PATH"
+fi
 echo "[info] generating plot" >&2
 python "$SCRIPT_DIR/plot.py" --input "$OUTPUT_PATH" --output "$PLOT_OUTPUT_PATH"
 echo "[done] wrote plot: $PLOT_OUTPUT_PATH" >&2

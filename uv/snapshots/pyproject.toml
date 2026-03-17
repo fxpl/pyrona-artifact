@@ -6,5 +6,5 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
-    "bocpy==0.2.1"
+    "bocpy==0.2.0"
 ]
