@@ -56,11 +56,12 @@ st.markdown(\
 ### Full Smoke Test
 
 You can click the "Run" button in the corner to run a full smoke test. This
-may take up to 10 minutes.
+may take up to 30 minutes.
 
 This full version includes all checks from the minimum smoke test. Additionally
-it runs the full CPython test-suite of our patched CPython and a trial run of
-pyperformance. The entire artifact is in a good state, if this passes.
+it runs the full CPython test-suite of our baseline and patched CPython
+and a trial run of pyperformance. The entire artifact is in a good state,
+if this passes.
 """)
 
 util.editable_bash_block("scripts/smoketest.sh", "smoketest")
@@ -68,6 +69,10 @@ util.editable_bash_block("scripts/smoketest.sh", "smoketest")
 
 st.markdown(\
 """
+You can increase or decrease the timeout each step has by setting the
+environment variable `SMOKETEST_TIMEOUT_SECONDS` for the script above.
+By default a timeout of 20 minutes per step is used.
+
 ## Tutorial
 
 This artifact uses interactive code blocks to show bash commands or

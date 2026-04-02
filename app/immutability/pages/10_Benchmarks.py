@@ -78,8 +78,8 @@ The script has an optional `--mode` argument with the following options:
 - `rigorous`: Spend longer running tests to get more accurate results
 
 This benchmark may take:
-- 60 minutes on normal mode
-- 20 minutes on fast mode
+- 5 hours on normal mode
+- 2 hours on fast mode
 
 For this artifact, we've disabled the `2to3` benchmark visible in the paper
 figure, since it requires external dependencies that are not available in the
@@ -110,7 +110,7 @@ Python. By default, it executes with multiple agents. We use the user
 time reported by the `time` command to get the used time across all
 cores.
 
-The execution may take up to 10 minutes:
+The execution may take up to 20 minutes:
 """)
 
 util.editable_bash_block("""benchmarks/tests/run.sh""", "bench-tests", output_lines=30)
@@ -122,7 +122,7 @@ st.markdown(\
 This microbenchmark compares the time required to freeze 1'000'000 objects
 with the time needed to pickle and unpickle them instead.
 
-The execution may take up to 5 minutes.
+The execution may take up to 20 minutes.
 """)
 util.editable_bash_block("""benchmarks/pickling-vs-freeze/run.sh""", "bench-pickle", output_lines=25)
 
@@ -141,7 +141,7 @@ Note: This figure requires 16+ cores to properly reproduce.
 We found that the benefit of direct sharing is only really
 noticeable after 8 (performance) cores.
 
-The execution may take up to 10 minutes.
+The execution may take up to 30 minutes.
 """)
 util.editable_bash_block(
     """benchmarks/subinterpreters/immutable-matrix-inversion/run.sh""",

@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARTIFACT_ROOT="$SCRIPT_DIR/.."
 ENV_FILE="$ARTIFACT_ROOT/env.env"
-TIMEOUT_SECONDS="${SMOKETEST_TIMEOUT_SECONDS:-300}"
+TIMEOUT_SECONDS="${SMOKETEST_TIMEOUT_SECONDS:-1200}"
 MINIMAL=0
 
 usage() {
@@ -67,9 +67,10 @@ fail_step() {
     local output_file="$3"
 
     echo "  [fail] $step_name"
-    echo "$reason"
     echo "--- command output ---"
     cat "$output_file"
+    echo "--- failure reason ---"
+    echo "$reason"
     FAIL_COUNT=$((FAIL_COUNT + 1))
 }
 
