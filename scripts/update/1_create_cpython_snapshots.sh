@@ -6,7 +6,7 @@ BASELINE_REPO="git@github.com:python/cpython.git"
 BASELINE_REF="aeff92d86a3"
 
 PATCHED_REPO="git@github.com:fxpl/cpython.git"
-PATCHED_REF="immutable-main"
+PATCHED_REF="codegen"
 
 OUTPUT_DIR="snapshots"
 FORCE=1
