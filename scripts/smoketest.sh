@@ -206,7 +206,7 @@ validate_pyperformance_env_check() {
 }
 
 if [ "$MINIMAL" -eq 0 ]; then
-    echo "[info] This smoke test may take up to 10 minutes"
+    echo "[info] This smoke test may take up to 30 minutes"
 fi
 
 run_step_in_dir \

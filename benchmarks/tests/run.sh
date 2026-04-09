@@ -66,7 +66,15 @@ run_make_test() {
 	(
 		cd "$dir"
 		{ time make test TESTOPTS="$TESTOPTS"; } > "$output_file" 2>&1
-	)
+	) || {
+		local exit_code=$?
+		cat "$output_file"
+		echo ""
+		echo "[error] --- failure reason ---"
+		echo "[error] running 'make test' for $label failed"
+		echo "[error] full logs are available at: $output_file"
+		exit $exit_code
+	}
 }
 
 run_make_test "baseline" "$BASELINE_BUILD_DIR" "$BASELINE_OUTPUT_FILE"
