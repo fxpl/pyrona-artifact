@@ -167,7 +167,7 @@ run_subinterpreters_series() {
             --num-trials "$NUM_TRIALS"
         )
         if [ "$with_freeze" -eq 1 ]; then
-            cmd+=(--freeze)
+            cmd+=(--tracing-regions)
         fi
 
         echo "[info] running subinterpreters: workers=$num_workers values=$num_values freeze=$with_freeze" >&2

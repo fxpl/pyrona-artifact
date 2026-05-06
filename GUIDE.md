@@ -18,7 +18,7 @@ Note: This file is auto generated based on comments in the code base.
 - Microbenchmark: Running CPython tests:
     - [./benchmarks/tests/README.md Line 3](./benchmarks/tests/README.md#L3)
 - The implementation of immutability related decorators:
-    - [./snapshots/cpython-patched/Lib/immutable.py Line 31](./snapshots/cpython-patched/Lib/immutable.py#L31)
+    - [./snapshots/cpython-patched/Lib/immutable.py Line 33](./snapshots/cpython-patched/Lib/immutable.py#L33)
 
 ## Tests
 
@@ -34,9 +34,9 @@ Note: This file is auto generated based on comments in the code base.
 - The atomic RC branch for immutable objects in Py_DECREF:
     - [./snapshots/cpython-patched/Include/refcount.h Line 564](./snapshots/cpython-patched/Include/refcount.h#L564)
 - The implementation of the `InterpreterLocal` type:
-    - [./snapshots/cpython-patched/Modules/_immutablemodule.c Line 192](./snapshots/cpython-patched/Modules/_immutablemodule.c#L192)
+    - [./snapshots/cpython-patched/Modules/_immutablemodule.c Line 193](./snapshots/cpython-patched/Modules/_immutablemodule.c#L193)
 - The implementation of the `SharedField` type:
-    - [./snapshots/cpython-patched/Modules/_immutablemodule.c Line 364](./snapshots/cpython-patched/Modules/_immutablemodule.c#L364)
+    - [./snapshots/cpython-patched/Modules/_immutablemodule.c Line 365](./snapshots/cpython-patched/Modules/_immutablemodule.c#L365)
 - The pre-freeze hook of function objects:
     - [./snapshots/cpython-patched/Objects/funcobject.c Line 1208](./snapshots/cpython-patched/Objects/funcobject.c#L1208)
 - This turns an existing ModuleObject into a proxy object::

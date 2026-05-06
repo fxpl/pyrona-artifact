@@ -164,3 +164,5 @@ def random_matrix(min_value: float, max_value: float) -> Matrix:
     m = Matrix()
     m.values = [random.random() * scale + min_value for _ in range(16)]
     return m
+
+class SimpleClass: pass

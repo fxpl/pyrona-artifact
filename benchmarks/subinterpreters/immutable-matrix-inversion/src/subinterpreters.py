@@ -7,14 +7,13 @@ from timeit import default_timer as timer
 import random
 from statistics import geometric_mean, mean, stdev
 
-from bocpy import send, receive
-from matrix import Matrix, random_matrix
+from bocpy import send, receive, Cown
+from matrix import Matrix, random_matrix, SimpleClass
 
 try:
     import _interpreters as interpreters
 except ModuleNotFoundError:
     import _xxsubinterpreters as interpreters
-
 
 def worker(interp, script):
     interpreters.run_string(interp, dedent(script))
@@ -46,15 +45,29 @@ def main():
     parser.add_argument("--batch-per-worker", "-b", type=int, default=4, help="Number of batches per worker")
     parser.add_argument("--freeze", "-f", action="store_true", help="whether to freeze the data")
     parser.add_argument("--verbose", "-v", action="store_true", help="Report individual trial results")
+    parser.add_argument("--seed", type=int, default=0, help="Set the seed for random")
+    parser.add_argument("--tracing-regions", action="store_true", help="whether to use tracing regions or not")
     args = parser.parse_args()
+
+    random.seed(args.seed)
 
     num_batches = args.num_workers * args.batch_per_worker
     batch_size = args.num_values // num_batches
     if num_batches * batch_size < args.num_values:
         batch_size += 1
 
-    batches = [tuple(random_matrix(-2, 2) for _ in range(batch_size))
-               for _ in range(num_batches)]
+    if args.tracing_regions:
+        from immutable import TracingRegion
+        Container = TracingRegion
+    else:
+        Container = SimpleClass
+
+    batches = [Cown(None) for _ in range(num_batches)]
+    for b in batches:
+        b.acquire()
+        b.value = Container()
+        b.value.values = tuple(random_matrix(-2, 2) for _ in range(batch_size))
+        b.release()
 
     if args.freeze:
         from immutable import freeze, is_frozen
