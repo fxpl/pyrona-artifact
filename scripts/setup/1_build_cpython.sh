@@ -159,7 +159,7 @@ run_build() {
 
     (
         cd "$dir"
-        ./configure --enable-optimizations
+        ./configure --enable-optimizations --with-mimalloc --without-pymalloc
         make clean
         if [ -n "$MAKE_JOBS" ]; then
             make -j "$MAKE_JOBS"
