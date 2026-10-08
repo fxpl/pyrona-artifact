@@ -136,6 +136,30 @@ def load(manifest_path: Path = MANIFEST_PATH) -> Config:
     return Config(variants=variants, configs=configs, stable_python=stable_python)
 
 
+def variant_commit(variant: str) -> str | None:
+    """The resolved snapshot commit for a variant, from snapshots/info.txt."""
+    info = ARTIFACT_ROOT / "snapshots" / "info.txt"
+    if not info.exists():
+        return None
+    prefix = f"{variant.upper()}_COMMIT="
+    for line in info.read_text().splitlines():
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+    return None
+
+
+def build_stamp(build: Build) -> str | None:
+    """Identity of a build's inputs (source commit + flags), or None if unknown.
+
+    This is the basis for incremental rebuilds, and the intended basis for
+    benchmark result caching once a CPU-frequency fingerprint is appended.
+    """
+    commit = variant_commit(build.variant)
+    if commit is None:
+        return None
+    return f"{commit} {' '.join(build.configure_flags)}"
+
+
 def env_var_names(config: Config) -> list[str]:
     """The variables that env.env exports; the source of truth for the preflight."""
     names = [f"{v.name.upper()}_PYTHON_DIR" for v in config.variants]
