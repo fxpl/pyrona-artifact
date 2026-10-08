@@ -212,8 +212,8 @@ fi
 run_step_in_dir \
     "immutability tests" \
     validate_success \
-    "$PATCHED_BUILD_DIR" \
-    "$PATCHED_PYTHON_BIN" -m unittest test.test_freeze
+    "$GIL_IMMUTABILITY_BUILD_DIR" \
+    "$GIL_IMMUTABILITY_PYTHON_BIN" -m unittest test.test_freeze
 
 run_step \
     "pyperformance env check" \

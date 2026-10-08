@@ -116,9 +116,8 @@ PATH="/root/.local/bin:${PATH}"
 source env.env
 
 # Build snapshots and Python environments used by the artifact.
-scripts/setup/1_build_cpython.sh
-scripts/setup/2_build_venv.sh
-scripts/setup/3_pyperformance_setup.sh
+# Extra arguments are forwarded to the CPython build (e.g. --jobs 8).
+scripts/setup/run_all.sh
 
 # Run minimal smoke test
 scripts/smoketest.sh --minimal

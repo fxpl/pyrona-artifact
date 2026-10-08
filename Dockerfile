@@ -54,9 +54,9 @@ EOF
 ENV BASH_ENV=/etc/profile.d/artifact-env.sh
 
 # Build snapshots and Python environments used by the artifact.
-RUN scripts/setup/1_build_cpython.sh --jobs ${CPYTHON_MAKE_JOBS}
-RUN scripts/setup/2_build_venv.sh
-RUN scripts/setup/3_pyperformance_setup.sh
+# env.env is a committed artifact (regenerated in the update phase), so setup
+# consumes it as-is.
+RUN scripts/setup/run_all.sh --jobs ${CPYTHON_MAKE_JOBS}
 
 RUN scripts/smoketest.sh --minimal
 

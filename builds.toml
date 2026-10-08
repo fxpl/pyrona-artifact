@@ -1,0 +1,31 @@
+# Canonical build manifest for the Pyrona artifact.
+#
+# Three CPython variants are compared:
+#     baseline <-> immutability <-> regions
+# each built in two configurations (gil, nogil), giving six builds.
+#
+# Consumers:
+#   scripts/update/0_generate_env.py       -> generates env.env from this file
+#   scripts/update/1_create_cpython_snapshots.py -> uses [variant.*] repo/ref
+#   scripts/setup/1_build_cpython.py       -> uses [config.*] configure_flags
+
+[variant.baseline]
+repo = "git@github.com:fxpl/cpython.git"
+ref = "aeff92d86a3"
+
+[variant.immutability]
+repo = "git@github.com:fxpl/cpython.git"
+ref = "immutable-nogil"
+
+[variant.regions]
+repo = "git@github.com:fxpl/cpython.git"
+ref = "tregions-main"
+
+[config.gil]
+configure_flags = ["--enable-optimizations", "--with-mimalloc", "--without-pymalloc"]
+
+[config.nogil]
+configure_flags = ["--enable-optimizations", "--disable-gil"]
+
+[stable]
+python = "3.14.3"
