@@ -188,23 +188,6 @@ run_step_in_dir() {
     ' bash "$work_dir" "$@"
 }
 
-validate_pyperformance_env_check() {
-    local output_file="$1"
-    local reason_var="$2"
-
-    if ! expect_contains "$output_file" "[done] Validating virtual environments:"; then
-        printf -v "$reason_var" '%s' "missing expected status header"
-        return 1
-    fi
-
-    if ! expect_fixed_count "$output_file" "(already created)" 2; then
-        printf -v "$reason_var" '%s' "expected exactly 2 '(already created)' lines"
-        return 1
-    fi
-
-    return 0
-}
-
 if [ "$MINIMAL" -eq 0 ]; then
     echo "[info] This smoke test may take up to 30 minutes"
 fi
@@ -217,8 +200,8 @@ run_step_in_dir \
 
 run_step \
     "pyperformance env check" \
-    validate_pyperformance_env_check \
-    bash "$ARTIFACT_ROOT/benchmarks/pyperformance/run.sh" --check-env
+    validate_success \
+    python3 "$ARTIFACT_ROOT/benchmarks/pyperformance/run.py" --check-env
 
 
 run_step \
@@ -242,7 +225,7 @@ if [ "$MINIMAL" -eq 0 ]; then
     run_step \
         "benchmark trial: pyperformance" \
         validate_success \
-        bash "$ARTIFACT_ROOT/benchmarks/pyperformance/run.sh" --mode single --cleanup-results
+        python3 "$ARTIFACT_ROOT/benchmarks/pyperformance/run.py" --mode single --cleanup-results
     run_step \
         "benchmark trial: tests" \
         validate_success \

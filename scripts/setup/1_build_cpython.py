@@ -27,26 +27,6 @@ def die(msg: str) -> None:
     sys.exit(f"error: {msg}")
 
 
-def variant_commit(variant: str) -> str | None:
-    """The resolved snapshot commit for a variant, from snapshots/info.txt."""
-    info = cfg.ARTIFACT_ROOT / "snapshots" / "info.txt"
-    if not info.exists():
-        return None
-    prefix = f"{variant.upper()}_COMMIT="
-    for line in info.read_text().splitlines():
-        if line.startswith(prefix):
-            return line[len(prefix):].strip()
-    return None
-
-
-def build_stamp(build: cfg.Build) -> str | None:
-    """Identity of a build's inputs, or None when it can't be determined."""
-    commit = variant_commit(build.variant)
-    if commit is None:
-        return None
-    return f"{commit} {' '.join(build.configure_flags)}"
-
-
 def is_up_to_date(build: cfg.Build, stamp: str | None) -> bool:
     if stamp is None or not build.python_bin.exists():
         return False
@@ -117,7 +97,7 @@ def main() -> None:
 
     built = 0
     for build in builds:
-        stamp = build_stamp(build)
+        stamp = cfg.build_stamp(build)
         if not args.force and is_up_to_date(build, stamp):
             console.success(f"build {build.id} (up to date)")
             continue

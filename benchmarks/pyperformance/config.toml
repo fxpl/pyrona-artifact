@@ -1,0 +1,19 @@
+# Configuration for the pyperformance benchmarks.
+#
+# Read by scripts/pyperf.py and consumed by both the setup step
+# (venv recreate) and the benchmark run, so the exclude list lives in one place.
+
+[pyperformance]
+mode = "default"          # single | fast | default | rigorous
+timeout = 180             # per-benchmark timeout in seconds; 0 disables
+online = false            # allow pyperformance to download benchmarks at run time
+
+# Benchmarks excluded on every platform:
+#   fastapi — incompatible with our CPython
+#   2to3    — requires external C libraries
+exclude = ["fastapi", "2to3"]
+
+# Additional exclusions keyed by platform.system().
+[pyperformance.exclude_by_os]
+# dask needs extra permissions on macOS.
+Darwin = ["dask"]
