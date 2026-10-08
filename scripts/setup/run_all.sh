@@ -7,11 +7,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ARTIFACT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Start from a clean build tree to avoid stale artifacts.
-rm -rf "$ARTIFACT_ROOT/build"
-
+# 1_build_cpython rebuilds only the builds whose inputs changed; pass --force to
+# rebuild everything.
 python3 "$SCRIPT_DIR/1_build_cpython.py" "$@"
 python3 "$SCRIPT_DIR/2_build_venv.py"
 python3 "$SCRIPT_DIR/3_pyperformance_setup.py"

@@ -1,6 +1,7 @@
 # Generated data
 /build/
 /docker
+/logs/
 
 # Tooling
 .hg

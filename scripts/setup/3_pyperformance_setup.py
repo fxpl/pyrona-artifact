@@ -3,19 +3,20 @@
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import artifact_config as cfg  # noqa: E402
+import console  # noqa: E402
 
 RUN_SH = cfg.ARTIFACT_ROOT / "benchmarks" / "pyperformance" / "run.sh"
 
 
 def main() -> None:
-    subprocess.run(["bash", str(RUN_SH), "--build-env"], check=True)
+    cfg.check_env()
+    console.run("pyperformance build-env", ["bash", str(RUN_SH), "--build-env"])
 
 
 if __name__ == "__main__":
-    main()
+    console.run_main(main)
