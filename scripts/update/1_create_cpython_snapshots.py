@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import artifact_config as cfg  # noqa: E402
+import console  # noqa: E402
 
 
 def die(msg: str) -> None:
@@ -103,8 +104,10 @@ def main() -> None:
         for variant in config.variants:
             if variant.repo not in clones:
                 dest = tmp / f"repo-{len(clones)}"
-                print(f"[info] cloning {variant.repo}")
-                git("clone", "--no-checkout", variant.repo, str(dest))
+                console.run(
+                    f"clone {variant.repo}",
+                    ["git", "clone", "--no-checkout", "--progress", variant.repo, str(dest)],
+                )
                 clones[variant.repo] = dest
 
         commits: dict[str, str] = {}
@@ -123,14 +126,14 @@ def main() -> None:
                     # Make the other variant's commit reachable in this clone.
                     git("fetch", "--quiet", other.repo, commits[other.name], cwd=clone)
                     inputs.append(commits[other.name])
-                print(f"[info] resolving {variant.name} as merge-base of {len(inputs)} commits")
+                console.info(f"resolving {variant.name} as merge-base of {len(inputs)} commits")
                 commits[variant.name] = git("merge-base", *inputs, cwd=clone, capture=True)
             elif variant.resolve is not None:
                 die(f"unknown resolve strategy for {variant.name}: {variant.resolve}")
 
         for variant in config.variants:
             commit = commits[variant.name]
-            print(f"[info] exporting {variant.name} ({commit[:12]}) -> {variant.src_dir}")
+            console.info(f"exporting {variant.name} ({commit[:12]}) -> {variant.src_dir}")
             export_commit(clones[variant.repo], commit, variant.src_dir)
 
         run_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -147,10 +150,10 @@ def main() -> None:
             ]
         (output_dir / "info.txt").write_text("\n".join(lines) + "\n")
 
-    print("[done] snapshots created")
+    console.success("snapshots created")
     for variant in config.variants:
         print(f"  {variant.name}: {variant.src_dir} ({commits[variant.name][:12]})")
 
 
 if __name__ == "__main__":
-    main()
+    console.run_main(main)

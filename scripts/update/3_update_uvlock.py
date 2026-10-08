@@ -20,7 +20,10 @@ def main() -> None:
     ):
         lock.unlink(missing_ok=True)
 
-    subprocess.run([sys.executable, str(BUILD_VENV), "--no-frozen"], check=True)
+    # 2_build_venv already reports its own failures; just mirror its exit code.
+    result = subprocess.run([sys.executable, str(BUILD_VENV), "--no-frozen"])
+    if result.returncode != 0:
+        sys.exit(result.returncode)
 
 
 if __name__ == "__main__":

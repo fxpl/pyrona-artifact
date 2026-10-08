@@ -7,6 +7,7 @@ regions) across the two configs (gil, nogil) into six concrete builds.
 
 from __future__ import annotations
 
+import os
 import platform
 import sys
 from dataclasses import dataclass, field
@@ -133,3 +134,26 @@ def load(manifest_path: Path = MANIFEST_PATH) -> Config:
     }
     stable_python = data["stable"]["python"]
     return Config(variants=variants, configs=configs, stable_python=stable_python)
+
+
+def env_var_names(config: Config) -> list[str]:
+    """The variables that env.env exports; the source of truth for the preflight."""
+    names = [f"{v.name.upper()}_PYTHON_DIR" for v in config.variants]
+    for build in config.builds:
+        p = build.env_prefix
+        names += [
+            f"{p}_BUILD_DIR",
+            f"{p}_PYTHON_BIN",
+            f"{p}_PYTHON_ENV",
+            f"{p}_PYTHON_ENV_ACTIVATE",
+        ]
+    names += ["STABLE_PYTHON_ENV", "STABLE_PYTHON_BIN", "STABLE_PYTHON_ENV_ACTIVATE"]
+    return names
+
+
+def check_env(config: Config | None = None) -> None:
+    """Fail fast if env.env has not been sourced into the environment."""
+    config = config or load()
+    for name in env_var_names(config):
+        if not os.environ.get(name):
+            sys.exit(f"error: {name} is undefined; run `source env.env` first.")
