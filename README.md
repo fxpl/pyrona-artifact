@@ -138,7 +138,7 @@ deactivate
 You can also run benchmarks directly like this:
 
 ```bash
-benchmarks/pickling-vs-freeze/run.sh
+experiments/pickling-vs-freeze/run.sh
 ```
 
 ## Navigation

@@ -20,7 +20,7 @@ import console  # noqa: E402
 
 TIMEOUT = float(os.environ.get("SMOKETEST_TIMEOUT_SECONDS", "1200"))
 ATTEMPTS = 2
-BENCH = cfg.ARTIFACT_ROOT / "benchmarks"
+BENCH = cfg.ARTIFACT_ROOT / "experiments"
 
 
 @dataclass
