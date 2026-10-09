@@ -5,13 +5,14 @@
 
 [pyperformance]
 mode = "default"          # single | fast | default | rigorous
-timeout = 180             # per-benchmark timeout in seconds; 0 disables
+timeout = 300             # per-benchmark timeout in seconds; 0 disables
 online = false            # allow pyperformance to download benchmarks at run time
 
 # Benchmarks excluded on every platform:
 #   fastapi — incompatible with our CPython
 #   2to3    — requires external C libraries
-exclude = ["fastapi", "2to3"]
+#   dask    - incompatible with 3.15a (Requires 3.15 or newer)
+exclude = ["fastapi", "2to3", "dask"]
 
 # Additional exclusions keyed by platform.system().
 [pyperformance.exclude_by_os]
