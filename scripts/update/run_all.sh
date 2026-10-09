@@ -15,8 +15,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARTIFACT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Bootstrap interpreter (needs Python 3.11+). Override on systems whose default
+# python3 is too old, e.g. PYTHON=python3.14 scripts/update/run_all.sh
+PYTHON="${PYTHON:-python3}"
+
 rm -rf "$ARTIFACT_ROOT/snapshots"
 
-python3 "$SCRIPT_DIR/0_generate_env.py"
-python3 "$SCRIPT_DIR/1_create_cpython_snapshots.py" "$@"
-python3 "$SCRIPT_DIR/2_build_navigation_guide.py" --root "$ARTIFACT_ROOT"
+"$PYTHON" "$SCRIPT_DIR/0_generate_env.py"
+"$PYTHON" "$SCRIPT_DIR/1_create_cpython_snapshots.py" "$@"
+"$PYTHON" "$SCRIPT_DIR/2_build_navigation_guide.py" --root "$ARTIFACT_ROOT"

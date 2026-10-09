@@ -8,8 +8,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Bootstrap interpreter (needs Python 3.11+). Override on systems whose default
+# python3 is too old, e.g. PYTHON=python3.14 scripts/setup/run_all.sh
+PYTHON="${PYTHON:-python3}"
+
 # 1_build_cpython rebuilds only the builds whose inputs changed; pass --force to
 # rebuild everything.
-python3 "$SCRIPT_DIR/1_build_cpython.py" "$@"
-python3 "$SCRIPT_DIR/2_build_venv.py"
-python3 "$SCRIPT_DIR/3_pyperformance_setup.py"
+"$PYTHON" "$SCRIPT_DIR/1_build_cpython.py" "$@"
+"$PYTHON" "$SCRIPT_DIR/2_build_venv.py"
+"$PYTHON" "$SCRIPT_DIR/3_pyperformance_setup.py"
