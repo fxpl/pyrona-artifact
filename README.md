@@ -120,7 +120,7 @@ source env.env
 scripts/setup/run_all.sh
 
 # Run minimal smoke test
-scripts/smoketest.sh --minimal
+python3 scripts/smoketest.py --minimal
 ```
 
 You can start the website locally using this command:

@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import queue
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -62,11 +63,18 @@ def _clip(line: str, width: int) -> str:
     return line
 
 
-def _write_log(headline: str, lines: list[str]) -> Path:
+def _write_log(headline: str, lines: list[str], command: str | None = None,
+               cwd: object | None = None) -> Path:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", headline).strip("-") or "step"
     path = LOG_DIR / f"{slug}-{time.strftime('%Y%m%d-%H%M%S')}.log"
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    header: list[str] = []
+    if command:
+        header.append(f"$ {command}")
+    if cwd:
+        header.append(f"# cwd: {cwd}")
+    body = "\n".join([*header, "", *lines]) if header else "\n".join(lines)
+    path.write_text(body + "\n", encoding="utf-8")
     return path
 
 
@@ -373,7 +381,7 @@ def run(
         _R.finish_ok()
         return rc
 
-    log_path = _write_log(headline, captured)
+    log_path = _write_log(headline, captured, command=shlex.join(list(cmd)), cwd=cwd)
     reason = f"timed out after {timeout:g}s" if timed_out else f"exit {rc}"
     ind = INDENT * _R.depth
     detail = [f"{ind}{_c('31', '✗')} {headline} {_c('2', f'({reason})')}"]

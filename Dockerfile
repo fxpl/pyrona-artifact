@@ -58,7 +58,7 @@ ENV BASH_ENV=/etc/profile.d/artifact-env.sh
 # consumes it as-is.
 RUN scripts/setup/run_all.sh --jobs ${CPYTHON_MAKE_JOBS}
 
-RUN scripts/smoketest.sh --minimal
+RUN python3 scripts/smoketest.py --minimal
 
 EXPOSE 8501
 ENTRYPOINT ["/bin/bash","-lc","source \"$STABLE_PYTHON_ENV_ACTIVATE\" && python -m streamlit run app/immutability/Artifact.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true"]

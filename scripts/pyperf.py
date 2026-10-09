@@ -6,6 +6,7 @@ list and the result-validity rules live in exactly one place.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import os
 import platform
@@ -21,6 +22,21 @@ import artifact_config as cfg  # noqa: E402
 CONFIG_PATH = cfg.ARTIFACT_ROOT / "benchmarks" / "pyperformance" / "config.toml"
 RESULTS_DIR = cfg.ARTIFACT_ROOT / "build" / "results" / "pyperformance"
 REFERENCES_DIR = cfg.ARTIFACT_ROOT / "benchmarks" / "pyperformance" / "references"
+STABLE_LOCK = cfg.ARTIFACT_ROOT / "uv" / "stable" / "uv.lock"
+
+
+@functools.cache
+def pyperformance_version() -> str:
+    """The locked pyperformance version from uv/stable (frozen-synced, so installed)."""
+    try:
+        with STABLE_LOCK.open("rb") as fh:
+            data = tomllib.load(fh)
+        for package in data.get("package", []):
+            if package.get("name") == "pyperformance":
+                return package.get("version", "unknown")
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+    return "unknown"
 
 
 @dataclass(frozen=True)
@@ -32,8 +48,9 @@ class PyperfConfig:
     exclude_by_os: dict[str, list[str]]
 
     def excludes(self) -> list[str]:
-        """Platform-effective exclude list."""
-        return [*self.exclude, *self.exclude_by_os.get(platform.system(), [])]
+        """Platform-effective exclude list, de-duplicated (order preserved)."""
+        combined = [*self.exclude, *self.exclude_by_os.get(platform.system(), [])]
+        return list(dict.fromkeys(combined))
 
     def benchmark_filter(self) -> str:
         """pyperformance ``--benchmarks`` value, e.g. ``-fastapi,-2to3``."""
@@ -42,6 +59,7 @@ class PyperfConfig:
     def fingerprint(self) -> str:
         """Config identity that invalidates a cached result when it changes."""
         return (
+            f"pyperformance={pyperformance_version()};"
             f"mode={self.mode};timeout={self.timeout};"
             f"online={int(self.online)};exclude={','.join(self.excludes())}"
         )
@@ -109,6 +127,15 @@ def machine_fingerprint() -> dict[str, str]:
 
 # --- result stamping --------------------------------------------------------
 
+def _stamp_inputs(build: cfg.Build, config: PyperfConfig) -> tuple[str, dict[str, str], list[str]] | None:
+    base = cfg.build_stamp(build)
+    if base is None:
+        return None
+    machine = machine_fingerprint()
+    parts = [base, config.fingerprint(), *(f"{k}={v}" for k, v in sorted(machine.items()))]
+    return base, machine, parts
+
+
 def result_stamp(build: cfg.Build, config: PyperfConfig) -> str | None:
     """Short hash over build + pyperformance config + machine + CPU frequency.
 
@@ -116,13 +143,34 @@ def result_stamp(build: cfg.Build, config: PyperfConfig) -> str | None:
     measured environment must be identical. Returns None when the build's
     source commit is unknown (snapshots/info.txt missing).
     """
-    base = cfg.build_stamp(build)
-    if base is None:
+    inputs = _stamp_inputs(build, config)
+    if inputs is None:
         return None
-    machine = machine_fingerprint()
-    parts = [base, config.fingerprint(), *(f"{k}={v}" for k, v in sorted(machine.items()))]
+    _, _, parts = inputs
     return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
 def result_path(build: cfg.Build, stamp: str) -> Path:
     return RESULTS_DIR / build.id / f"{stamp}.json"
+
+
+def stamp_path(build: cfg.Build, stamp: str) -> Path:
+    return RESULTS_DIR / build.id / f"{stamp}.stamp.txt"
+
+
+def write_stamp(build: cfg.Build, config: PyperfConfig, stamp: str) -> None:
+    """Record the stamp's readable components next to the result."""
+    inputs = _stamp_inputs(build, config)
+    if inputs is None:
+        return
+    base, machine, _ = inputs
+    lines = [
+        f"stamp={stamp}",
+        f"build={build.id}",
+        f"build_stamp={base}",
+        f"pyperf_config={config.fingerprint()}",
+        *(f"machine.{k}={v}" for k, v in sorted(machine.items())),
+    ]
+    path = stamp_path(build, stamp)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
