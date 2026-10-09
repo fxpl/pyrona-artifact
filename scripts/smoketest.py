@@ -20,34 +20,36 @@ import console  # noqa: E402
 
 TIMEOUT = float(os.environ.get("SMOKETEST_TIMEOUT_SECONDS", "1200"))
 ATTEMPTS = 2
-BENCH = cfg.ARTIFACT_ROOT / "experiments"
+EXPERIMENTS = cfg.ARTIFACT_ROOT / "experiments"
 
 
 @dataclass
 class Step:
     name: str
-    cmd: list[str]
+    cmd: list[str] | None = None
+    children: list["Step"] | None = None  # group: run each as a sub-step under a section
     cwd: Path | None = None
     full_only: bool = False  # only run in a non-minimal smoke test
 
 
 def build_steps(config: cfg.Config) -> list[Step]:
-    builds = {b.id: b for b in config.builds}
-    immut = builds["gil-immutability"]
-    run_py = [sys.executable, str(BENCH / "pyperformance" / "run.py")]
+    run_py = [sys.executable, str(EXPERIMENTS / "pyperformance" / "run.py")]
+    tests_run = str(EXPERIMENTS / "tests" / "run.py")
 
-    return [
+    steps = [
         Step(
-            "immutability tests",
-            [str(immut.python_bin), "-m", "unittest", "test.test_freeze"],
-            cwd=immut.build_dir,
+            "regression tests",
+            children=[
+                Step(build.id, [sys.executable, tests_run, build.id, "--profile", "smoke"])
+                for build in config.builds
+            ],
         ),
         Step("pyperformance env check", [*run_py, "--check-env"]),
         Step(
             "benchmark trial: subinterpreters",
             [
                 "bash",
-                str(BENCH / "subinterpreters" / "immutable-matrix-inversion" / "run.sh"),
+                str(EXPERIMENTS / "subinterpreters" / "immutable-matrix-inversion" / "run.sh"),
                 "--workers-max", "4",
                 "--values-per-worker", "10",
                 "--num-trials", "1",
@@ -57,7 +59,7 @@ def build_steps(config: cfg.Config) -> list[Step]:
         Step(
             "benchmark trial: pickling-vs-freezing",
             [
-                "bash", str(BENCH / "pickling-vs-freeze" / "run.sh"),
+                "bash", str(EXPERIMENTS / "pickling-vs-freeze" / "run.sh"),
                 "--size", "10",
                 "--num-trials", "1",
                 "--cleanup-results",
@@ -65,26 +67,34 @@ def build_steps(config: cfg.Config) -> list[Step]:
         ),
         Step(
             "benchmark trial: pyperformance",
-            [*run_py, "--mode", "single", "--force"],
-            full_only=True,
-        ),
-        Step(
-            "benchmark trial: tests",
-            ["bash", str(BENCH / "tests" / "run.sh"), "--cleanup-results"],
+            children=[
+                Step(build.id, [*run_py, "--only", build.id, "--mode", "single", "--force"])
+                for build in config.builds
+            ],
             full_only=True,
         ),
     ]
+    return steps
+
+
+def _attempt(name: str, cmd: list[str], cwd: Path | None = None) -> bool:
+    """Run a command up to ATTEMPTS times; True if any attempt succeeds."""
+    for attempt in range(1, ATTEMPTS + 1):
+        label = name if attempt == 1 else f"{name} (retry {attempt}/{ATTEMPTS})"
+        if console.run(label, cmd, cwd=cwd, timeout=TIMEOUT, check=False) == 0:
+            return True
+    return False
 
 
 def run_step(index: int, total: int, step: Step) -> bool:
     headline = f"[{index}/{total}] {step.name}"
-    for attempt in range(1, ATTEMPTS + 1):
-        rc = console.run(headline, step.cmd, cwd=step.cwd, timeout=TIMEOUT, check=False)
-        if rc == 0:
-            return True
-        if attempt < ATTEMPTS:
-            console.info(f"retrying {step.name} (attempt {attempt + 1}/{ATTEMPTS})")
-    return False
+    if step.children is not None:
+        with console.section(headline) as sec:
+            results = [_attempt(c.name, c.cmd, c.cwd) for c in step.children]
+            if not all(results):
+                sec.fail()
+        return all(results)
+    return _attempt(headline, step.cmd, step.cwd)
 
 
 def main() -> None:

@@ -67,7 +67,7 @@ def _write_log(headline: str, lines: list[str], command: str | None = None,
                cwd: object | None = None) -> Path:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", headline).strip("-") or "step"
-    path = LOG_DIR / f"{slug}-{time.strftime('%Y%m%d-%H%M%S')}.log"
+    path = LOG_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_{slug}.log"
     header: list[str] = []
     if command:
         header.append(f"$ {command}")
@@ -226,6 +226,35 @@ class _Renderer:
         else:
             self._commit([f"{INDENT * self.depth}{summary}"])
 
+    def finish_failed(self, reason: str, log_path: object) -> None:
+        """Record the active command as a failed child and keep the section going.
+
+        Used for soft failures (``check=False`` inside a section): the step is
+        marked ✗ but the run continues, rather than baking out like ``fail``.
+        """
+        headline = self.active.headline if self.active else "(step)"
+        self.active = None
+        lines = [
+            f"{_c('31', '✗')} {headline}",
+            _c("2", f"{GUTTER}({reason})"),
+            _c("2", f"{GUTTER}Full log: {log_path}"),
+        ]
+        if _interactive() and self.stack:
+            self.stack[-1].children.extend(lines)
+            self.redraw(force=True)
+        else:
+            ind = INDENT * self.depth
+            self._commit([ind + line for line in lines])
+
+    def child(self, text: str) -> None:
+        """Add a standalone child line (e.g. a skipped step) to the section."""
+        if _interactive() and self.stack:
+            self.stack[-1].children.append(text)
+            self.redraw(force=True)
+        else:
+            depth = self.depth + 1 if self.stack else self.depth
+            print(INDENT * depth + text, flush=True)
+
     def fail(self, detail: list[str]) -> None:
         """Present a failed command and bake the surrounding context permanently."""
         self.active = None
@@ -266,13 +295,35 @@ def error(msg: str) -> None:
     _R.message("✗", "31", msg)
 
 
+def skip(label: str) -> None:
+    """Record a skipped step (a child of the current section, or a plain line)."""
+    _R.child(f"{_c('33', '-')} {label}")
+
+
+class SectionHandle:
+    """Yielded by ``section``; call ``fail()`` to mark the section failed."""
+
+    def __init__(self, renderer: "_Renderer") -> None:
+        self._renderer = renderer
+
+    def fail(self) -> None:
+        if self._renderer.stack:
+            self._renderer.stack[-1].failed = True
+
+
 @contextmanager
-def section(title: str, *, collapse: bool = True) -> Iterator[None]:
-    """Group the steps run inside the block under ``title``."""
+def section(title: str, *, collapse: bool = True) -> Iterator[SectionHandle]:
+    """Group the steps run inside the block under ``title``.
+
+    A soft failure inside (``console.run(..., check=False)``) renders a ✗ child
+    but does not by itself fail the section — call ``handle.fail()`` to mark the
+    section failed, so a step that passes on retry still reads as ✓.
+    """
     _R.open(title, collapse)
     failed = False
+    handle = SectionHandle(_R)
     try:
-        yield
+        yield handle
     except BaseException:
         failed = True
         raise
@@ -383,6 +434,13 @@ def run(
 
     log_path = _write_log(headline, captured, command=shlex.join(list(cmd)), cwd=cwd)
     reason = f"timed out after {timeout:g}s" if timed_out else f"exit {rc}"
+
+    # Soft failure: inside a section with check disabled, record a ✗ child and
+    # let the section keep going instead of baking the whole context out.
+    if not check and _R.stack:
+        _R.finish_failed(reason, log_path)
+        return 124 if timed_out else rc
+
     ind = INDENT * _R.depth
     detail = [f"{ind}{_c('31', '✗')} {headline} {_c('2', f'({reason})')}"]
     if _interactive():

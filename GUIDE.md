@@ -15,13 +15,13 @@ Note: This file is auto generated based on comments in the code base.
     - [./experiments/pyperformance/README.md Line 3](./experiments/pyperformance/README.md#L3)
 - Microbenchmark: Direct Sharing Across Sub-interpreters:
     - [./experiments/subinterpreters/immutable-matrix-inversion/README.md Line 3](./experiments/subinterpreters/immutable-matrix-inversion/README.md#L3)
-- Microbenchmark: Running CPython tests:
-    - [./experiments/tests/README.md Line 3](./experiments/tests/README.md#L3)
 - The implementation of immutability related decorators:
     - [./snapshots/cpython-patched/Lib/immutable.py Line 31](./snapshots/cpython-patched/Lib/immutable.py#L31)
 
 ## Tests
 
+- CPython's regression test suite across the build matrix:
+    - [./experiments/tests/README.md Line 3](./experiments/tests/README.md#L3)
 - The collection of tests for immutability:
     - [./snapshots/cpython-patched/Lib/test/test_freeze/README.md Line 4](./snapshots/cpython-patched/Lib/test/test_freeze/README.md#L4)
 
