@@ -1,0 +1,25 @@
+# Profiles for running CPython's regression test suite across the build matrix.
+#
+# Read by run.py. Pick a profile with --profile; `default` is used otherwise.
+# Each profile selects which tests to run (empty `select` = the whole suite),
+# which to exclude, the regrtest parallelism, and an optional per-test timeout.
+
+[tests]
+default = "full"
+
+[tests.profiles.full]
+exclude = ["test_ssl", "test_embed"]   # flaky on the baseline build
+jobs = 0        # regrtest -j (0 = auto-detect cores)
+timeout = 0     # regrtest --timeout in seconds (0 = disabled)
+
+[tests.profiles.quick]
+select = ["test_grammar", "test_builtin", "test_dict", "test_list", "test_types", "test_freeze"]
+exclude = []
+jobs = 0
+timeout = 0
+
+[tests.profiles.smoke]
+select = ["test_builtin", "test_dict", "test_list", "test_types", "test_freeze"]
+exclude = []
+jobs = 0
+timeout = 0
