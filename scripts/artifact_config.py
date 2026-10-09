@@ -14,7 +14,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 if sys.version_info < (3, 11):
-    sys.exit("error: Python 3.11+ is required (needs tomllib)")
+    sys.exit(
+        f"error: Python 3.11+ is required (needs tomllib), got {sys.version.split()[0]}.\n"
+        "Set PYTHON to a newer interpreter, e.g. PYTHON=python3.14 scripts/setup/run_all.sh"
+    )
 
 import tomllib
 

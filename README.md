@@ -115,12 +115,16 @@ PATH="/root/.local/bin:${PATH}"
 # Load Environment Variables
 source env.env
 
+# The scripts need Python 3.11+. If your default python3 is older, point PYTHON
+# at a newer interpreter; everything downstream inherits it.
+export PYTHON="${PYTHON:-python3}"
+
 # Build snapshots and Python environments used by the artifact.
 # Extra arguments are forwarded to the CPython build (e.g. --jobs 8).
 scripts/setup/run_all.sh
 
 # Run minimal smoke test
-python3 scripts/smoketest.py --minimal
+"$PYTHON" scripts/smoketest.py --minimal
 ```
 
 You can start the website locally using this command:
