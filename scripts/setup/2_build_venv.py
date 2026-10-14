@@ -18,7 +18,8 @@ STABLE_PROJECT = cfg.ARTIFACT_ROOT / "uv" / "stable"
 
 
 def die(msg: str) -> None:
-    sys.exit(f"error: {msg}")
+    console.error(msg)
+    sys.exit(1)
 
 
 def build_venv(label: str, python: str, venv_dir: Path, project: Path, frozen: bool) -> None:

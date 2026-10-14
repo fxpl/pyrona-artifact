@@ -106,13 +106,11 @@ def compare_all(config: cfg.Config, results: dict[str, Path]) -> None:
             if candidate is None:
                 continue
             label = f"{config_name}-{variant.name}"
-            txt = compare(config, baseline, candidate, label)
             console.run(
                 f"plot {label}",
                 [
                     str(config.stable_python_bin), str(PLOT_PY),
-                    str(txt), str(COMPARE_DIR / f"{label}.pdf"),
-                    "--title", f"{config_name}: {variant.name} vs baseline",
+                    str(baseline), str(candidate), str(COMPARE_DIR / f"{label}.pdf"),
                 ],
             )
 
