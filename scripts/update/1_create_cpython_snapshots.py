@@ -25,7 +25,8 @@ import console  # noqa: E402
 
 
 def die(msg: str) -> None:
-    sys.exit(f"error: {msg}")
+    console.error(msg)
+    sys.exit(1)
 
 
 def git(*args: str, cwd: Path | None = None, capture: bool = False, quiet: bool = False) -> str:

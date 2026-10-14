@@ -24,7 +24,8 @@ STAMP_NAME = ".artifact-build"
 
 
 def die(msg: str) -> None:
-    sys.exit(f"error: {msg}")
+    console.error(msg)
+    sys.exit(1)
 
 
 def is_up_to_date(build: cfg.Build, stamp: str | None) -> bool:
