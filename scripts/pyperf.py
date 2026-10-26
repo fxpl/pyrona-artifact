@@ -106,11 +106,11 @@ def _cpu_model() -> str:
 
 
 def _cpu_freq() -> str:
-    """Governor and current frequency, when the platform exposes them."""
+    """Governor and configured frequency limit, when exposed by the platform."""
     if platform.system() == "Linux":
         base = "/sys/devices/system/cpu/cpu0/cpufreq"
         gov = _read(f"{base}/scaling_governor") or "unknown"
-        freq = _read(f"{base}/scaling_cur_freq") or "unknown"
+        freq = _read(f"{base}/scaling_max_freq") or "unknown"
         return f"{gov}@{freq}"
     return "unknown"
 
@@ -127,26 +127,33 @@ def machine_fingerprint() -> dict[str, str]:
 
 # --- result stamping --------------------------------------------------------
 
-def _stamp_inputs(build: cfg.Build, config: PyperfConfig) -> tuple[str, dict[str, str], list[str]] | None:
-    base = cfg.build_stamp(build)
-    if base is None:
-        return None
+def _stamp_inputs(build: cfg.Build, config: PyperfConfig) -> tuple[str, dict[str, str], list[str]]:
+    path = build.build_dir / ".artifact-build"
+    try:
+        base = path.read_text().strip()
+    except OSError as error:
+        raise RuntimeError(
+            f"Cannot identify build {build.id}: cannot read build stamp {path}. "
+            "Rebuild it before running benchmarks."
+        ) from error
+    if not base:
+        raise RuntimeError(
+            f"Cannot identify build {build.id}: build stamp {path} is empty. "
+            "Rebuild it before running benchmarks."
+        )
     machine = machine_fingerprint()
     parts = [base, config.fingerprint(), *(f"{k}={v}" for k, v in sorted(machine.items()))]
     return base, machine, parts
 
 
-def result_stamp(build: cfg.Build, config: PyperfConfig) -> str | None:
-    """Short hash over build + pyperformance config + machine + CPU frequency.
+def result_stamp(build: cfg.Build, config: PyperfConfig) -> str:
+    """Short hash over build + pyperformance config + machine settings.
 
     A cached result is reused only when this stamp matches, so the whole
-    measured environment must be identical. Returns None when the build's
-    source commit is unknown (snapshots/info.txt missing).
+    configured environment must be identical. The completed build's identity
+    must be available in its nonempty .artifact-build stamp.
     """
-    inputs = _stamp_inputs(build, config)
-    if inputs is None:
-        return None
-    _, _, parts = inputs
+    _, _, parts = _stamp_inputs(build, config)
     return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
@@ -160,10 +167,7 @@ def stamp_path(build: cfg.Build, stamp: str) -> Path:
 
 def write_stamp(build: cfg.Build, config: PyperfConfig, stamp: str) -> None:
     """Record the stamp's readable components next to the result."""
-    inputs = _stamp_inputs(build, config)
-    if inputs is None:
-        return
-    base, machine, _ = inputs
+    base, machine, _ = _stamp_inputs(build, config)
     lines = [
         f"stamp={stamp}",
         f"build={build.id}",

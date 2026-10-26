@@ -42,18 +42,17 @@ MODE_FLAGS = {
 
 def run_build(config: cfg.Config, pc: pyperf.PyperfConfig, build: cfg.Build, force: bool) -> Path | None:
     stamp = pyperf.result_stamp(build, pc)
-    out = pyperf.result_path(build, stamp) if stamp else pyperf.RESULTS_DIR / build.id / "unstamped.json"
+    out = pyperf.result_path(build, stamp)
     # The stamp sidecar is written only after a fully successful run, so it is
     # the completion marker: a partial result left by a failed run has no
     # sidecar and is therefore re-run rather than reused.
-    complete = stamp and out.exists() and pyperf.stamp_path(build, stamp).exists()
+    complete = out.exists() and pyperf.stamp_path(build, stamp).exists()
     if complete and not force:
         console.success(f"run {build.id} (cached)")
         return out
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    if stamp:
-        pyperf.stamp_path(build, stamp).unlink(missing_ok=True)
+    pyperf.stamp_path(build, stamp).unlink(missing_ok=True)
     out.unlink(missing_ok=True)  # pyperformance refuses to overwrite its -o target
     args = [
         str(config.stable_python_bin), "-m", "pyperformance", "run",
@@ -71,8 +70,7 @@ def run_build(config: cfg.Config, pc: pyperf.PyperfConfig, build: cfg.Build, for
         args += ["--timeout", str(pc.timeout)]
 
     console.run(f"run {build.id}", args, cwd=RUN_DIR, env=env)
-    if stamp:
-        pyperf.write_stamp(build, pc, stamp)
+    pyperf.write_stamp(build, pc, stamp)
     return out
 
 
