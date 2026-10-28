@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -118,9 +119,27 @@ class Config:
         return self.stable_venv_dir / "bin" / "activate"
 
 
+# Build keys end up in shell variable names (uppercased, joined with `_`),
+# so dashes and other punctuation would emit invalid identifiers in env.env.
+_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_keys(kind: str, keys: list[str]) -> None:
+    bad = [k for k in keys if not _KEY_RE.match(k)]
+    if bad:
+        joined = ", ".join(repr(k) for k in bad)
+        sys.exit(
+            f"error: invalid {kind} name(s) in builds.toml: {joined}\n"
+            "use letters, digits, and underscores only (no dashes)."
+        )
+
+
 def load(manifest_path: Path = MANIFEST_PATH) -> Config:
     with manifest_path.open("rb") as fh:
         data = tomllib.load(fh)
+
+    _validate_keys("variant", list(data["variant"]))
+    _validate_keys("config", list(data["config"]))
 
     variants = [
         Variant(
