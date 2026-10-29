@@ -4,7 +4,7 @@
 # CPython source snapshots, and rebuild the navigation guide. Extra arguments
 # are forwarded to the snapshot step (e.g. --no-force).
 #
-# Snapshots are wiped so stale variants are pruned and re-exported; build trees
+# Snapshots are wiped so stale snapshots are pruned and re-exported; build trees
 # are left in place because the setup phase rebuilds incrementally (only the
 # builds whose source commit actually changed). Refreshing the uv lockfiles
 # (3_update_uvlock.py) is intentionally left out: run it on demand after a setup

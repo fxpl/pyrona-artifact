@@ -1,8 +1,8 @@
 """Shared build-matrix configuration derived from ``builds.toml``.
 
 This is the single source of truth for every setup/update script and for the
-generated ``env.env``. It expands the three variants (baseline, immutability,
-regions) across the two configs (gil, nogil) into six concrete builds.
+generated ``env.env``. It expands each snapshot across its listed configs into
+the corresponding concrete builds.
 """
 
 from __future__ import annotations
@@ -40,11 +40,11 @@ PYTHON_BIN_SUFFIX = _python_bin_suffix()
 
 
 @dataclass(frozen=True)
-class Variant:
+class Snapshot:
     name: str
     repo: str
     ref: str
-    resolve: str | None  # None or "merge-base"
+    config: list[str]
 
     @property
     def src_dir(self) -> Path:
@@ -54,20 +54,20 @@ class Variant:
 @dataclass(frozen=True)
 class Build:
     config: str
-    variant: str
+    snapshot: str
     configure_flags: list[str] = field(default_factory=list)
 
     @property
     def id(self) -> str:
-        return f"{self.config}-{self.variant}"
+        return f"{self.config}-{self.snapshot}"
 
     @property
     def env_prefix(self) -> str:
-        return f"{self.config.upper()}_{self.variant.upper()}"
+        return f"{self.config.upper()}_{self.snapshot.upper()}"
 
     @property
     def src_dir(self) -> Path:
-        return ARTIFACT_ROOT / "snapshots" / f"cpython-{self.variant}"
+        return ARTIFACT_ROOT / "snapshots" / f"cpython-{self.snapshot}"
 
     @property
     def build_dir(self) -> Path:
@@ -88,23 +88,23 @@ class Build:
 
 @dataclass(frozen=True)
 class Config:
-    variants: list[Variant]
+    snapshots: list[Snapshot]
     configs: dict[str, list[str]]  # config name -> configure flags
     stable_python: str
 
     @property
     def builds(self) -> list[Build]:
         out: list[Build] = []
-        for config, flags in self.configs.items():
-            for variant in self.variants:
-                out.append(Build(config, variant.name, list(flags)))
+        for snapshot in self.snapshots:
+            for config in snapshot.config:
+                out.append(Build(config, snapshot.name, list(self.configs[config])))
         return out
 
-    def variant(self, name: str) -> Variant:
-        for v in self.variants:
-            if v.name == name:
-                return v
-        raise KeyError(f"unknown variant: {name}")
+    def snapshot(self, name: str) -> Snapshot:
+        for snapshot in self.snapshots:
+            if snapshot.name == name:
+                return snapshot
+        raise KeyError(f"unknown snapshot: {name}")
 
     @property
     def stable_venv_dir(self) -> Path:
@@ -138,32 +138,41 @@ def load(manifest_path: Path = MANIFEST_PATH) -> Config:
     with manifest_path.open("rb") as fh:
         data = tomllib.load(fh)
 
-    _validate_keys("variant", list(data["variant"]))
+    _validate_keys("snapshot", list(data["snapshot"]))
     _validate_keys("config", list(data["config"]))
 
-    variants = [
-        Variant(
+    snapshots = [
+        Snapshot(
             name=name,
             repo=spec["repo"],
             ref=spec["ref"],
-            resolve=spec.get("resolve"),
+            config=list(spec["config"]),
         )
-        for name, spec in data["variant"].items()
+        for name, spec in data["snapshot"].items()
     ]
     configs = {
         name: list(spec["configure_flags"])
         for name, spec in data["config"].items()
     }
+    unknown_configs = [
+        f"{snapshot.name}.{name}"
+        for snapshot in snapshots
+        for name in snapshot.config
+        if name not in configs
+    ]
+    if unknown_configs:
+        joined = ", ".join(repr(name) for name in unknown_configs)
+        sys.exit(f"error: unknown config(s) in builds.toml: {joined}")
     stable_python = data["stable"]["python"]
-    return Config(variants=variants, configs=configs, stable_python=stable_python)
+    return Config(snapshots=snapshots, configs=configs, stable_python=stable_python)
 
 
-def variant_commit(variant: str) -> str | None:
-    """The resolved snapshot commit for a variant, from snapshots/info.txt."""
+def snapshot_commit(snapshot: str) -> str | None:
+    """The resolved source commit for a snapshot, from snapshots/info.txt."""
     info = ARTIFACT_ROOT / "snapshots" / "info.txt"
     if not info.exists():
         return None
-    prefix = f"{variant.upper()}_COMMIT="
+    prefix = f"{snapshot.upper()}_COMMIT="
     for line in info.read_text().splitlines():
         if line.startswith(prefix):
             return line[len(prefix):].strip()
@@ -176,7 +185,7 @@ def build_stamp(build: Build) -> str | None:
     This is the basis for incremental rebuilds, and the intended basis for
     benchmark result caching once a CPU-frequency fingerprint is appended.
     """
-    commit = variant_commit(build.variant)
+    commit = snapshot_commit(build.snapshot)
     if commit is None:
         return None
     return f"{commit} {' '.join(build.configure_flags)}"
@@ -184,7 +193,7 @@ def build_stamp(build: Build) -> str | None:
 
 def env_var_names(config: Config) -> list[str]:
     """The variables that env.env exports; the source of truth for the preflight."""
-    names = [f"{v.name.upper()}_PYTHON_DIR" for v in config.variants]
+    names = [f"{snapshot.name.upper()}_PYTHON_DIR" for snapshot in config.snapshots]
     for build in config.builds:
         p = build.env_prefix
         names += [

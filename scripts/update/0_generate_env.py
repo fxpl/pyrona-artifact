@@ -43,15 +43,15 @@ unset _PYTHON_BIN_SUFFIX
 
 
 def render(config: cfg.Config) -> str:
-    lines = [HEADER, "# Variant source snapshots"]
-    for variant in config.variants:
-        name = variant.name.upper()
+    lines = [HEADER, "# CPython source snapshots"]
+    for snapshot in config.snapshots:
+        name = snapshot.name.upper()
         lines.append(
-            f'export {name}_PYTHON_DIR="${{ARTIFACT_ROOT}}/snapshots/cpython-{variant.name}"'
+            f'export {name}_PYTHON_DIR="${{ARTIFACT_ROOT}}/snapshots/cpython-{snapshot.name}"'
         )
 
     lines.append("")
-    lines.append("# Builds (config x variant)")
+    lines.append("# Builds (config x snapshot)")
     for build in config.builds:
         p = build.env_prefix
         lines.append(

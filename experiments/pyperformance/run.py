@@ -97,13 +97,13 @@ def compare_all(config: cfg.Config, results: dict[str, Path]) -> None:
         if baseline is None:
             console.info(f"no baseline result for {config_name}; skipping comparison")
             continue
-        for variant in config.variants:
-            if variant.name == "baseline":
+        for snapshot in config.snapshots:
+            if snapshot.name == "baseline":
                 continue
-            candidate = results.get(f"{config_name}-{variant.name}")
+            candidate = results.get(f"{config_name}-{snapshot.name}")
             if candidate is None:
                 continue
-            label = f"{config_name}-{variant.name}"
+            label = f"{config_name}-{snapshot.name}"
             console.run(
                 f"plot {label}",
                 [

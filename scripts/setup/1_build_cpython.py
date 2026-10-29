@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build every (config x variant) CPython in the matrix.
+"""Build selected (config x snapshot) CPythons.
 
-For each build we copy the variant's source snapshot into its own build tree,
+For each build we copy the snapshot's source into its own build tree,
 then run ``./configure`` with the config's flags followed by ``make``.
 
 Builds are incremental: a build is skipped when its tree is already up to date,

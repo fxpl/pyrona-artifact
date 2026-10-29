@@ -2,8 +2,8 @@
 """Pre-build a pyperformance benchmark venv for each build interpreter.
 
 Runs pyperformance from the stable environment (it is the only venv with the
-tool installed) against every (config x variant) CPython, so the benchmarks can
-later run offline for all six builds.
+tool installed) against every configured CPython build, so the benchmarks can
+later run offline for all builds.
 """
 
 from __future__ import annotations
