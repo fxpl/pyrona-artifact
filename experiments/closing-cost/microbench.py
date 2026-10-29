@@ -22,6 +22,8 @@ def from_immutable_import(name: str):
         return None
 
 deep_freeze = from_immutable_import("deep_freeze")
+set_freezable = from_immutable_import("set_freezable")
+FREEZABLE_YES = from_immutable_import("FREEZABLE_YES")
 TRegion = from_immutable_import("TracingRegion")
 
 def assert_defined(name: str):
@@ -29,6 +31,10 @@ def assert_defined(name: str):
         raise RuntimeError(
             "the name {name} is undefined, ensure you're running the right version"
         )
+
+def close_region(r):
+    TRegion.close(r)
+    return r
 
 ###############################################################################
 # Data definition and generation
@@ -55,14 +61,14 @@ class TreeNode:
             else:
                 self.right.insert(key)
 
-    def print(self):
+    def __str__(self):
+        parts = []
         if self.left is not None:
-            self.left.print()
-
-        print(self.val, end=" ")
-
+            parts.append(str(self.left))
+        parts.append(self.val)
         if self.right is not None:
-            self.right.print()
+            parts.append(str(self.right))
+        return " ".join(parts)
 
 def gen_user_defined(seed, size):
     """This builds a binary tree with {size} nodes. The keys are random strings
@@ -99,25 +105,23 @@ def gen_builtin_objects(seed, size):
 # Benchmark
 ###############################################################################
 
-def setup_close_and_reopen(data):
-    assert isinstance(data, TRegion)
+def snapshot(data):
+    # Regions keep their payload in `.data`; compare that, not the wrapper.
+    if TRegion is not None and isinstance(data, TRegion):
+        return str(data.data)
+    return str(data)
 
-    # Close the region
-    TRegion.close(data)
 
-    # Reopen it again
-    assert TRegion.data is not None
-
-    # Ensure the reopen succeeded
-    assert TRegion.is_open(data)
-
-def experiment(trials, seed, size, gen_data, steps):
+def experiment(trials, seed, size, gen_data, steps, validate=False):
     results = [[] for _ in steps]
 
     for trial in range(trials):
         if size > 10000:
             print(".", end="", flush=True)
         data = gen_data(seed, size)
+
+        check = validate and trial == 0
+        before = snapshot(data) if check else None
 
         for step_idx in range(len(steps)):
             # Prep
@@ -130,6 +134,12 @@ def experiment(trials, seed, size, gen_data, steps):
 
             # Record
             results[step_idx].append(time)
+
+        if check:
+            ok = snapshot(data) == before and data is not None
+            print(f"[validate] output equivalent to input: {ok}")
+            if not ok:
+                raise RuntimeError("validation failed: output differs from input")
 
     return results
 
@@ -153,19 +163,22 @@ if __name__ == '__main__':
     elif args.data == "user-defined":
         gen_data = gen_user_defined
 
+    if args.operation != "pickling":
+        set_freezable(TreeNode, FREEZABLE_YES)
+
     match args.operation:
         case "pickling":
-            run_trials = lambda trials: experiment(trials, seed, size, gen_data, [pickle.dumps, pickle.loads])
+            run_trials = lambda trials, validate=False: experiment(trials, seed, size, gen_data, [pickle.dumps, pickle.loads], validate)
         case "freeze":
             assert_defined("deep_freeze")
-            run_trials = lambda trials: experiment(trials, seed, size, gen_data, [deep_freeze])
+            run_trials = lambda trials, validate=False: experiment(trials, seed, size, gen_data, [deep_freeze], validate)
         case "close":
             assert_defined("TRegion")
             def gen_open_region(seed, size):
                 r = TRegion()
                 r.data = gen_data(seed, size)
                 return r
-            run_trials = lambda trials: experiment(trials, seed, size, gen_open_region, [TRegion.close])
+            run_trials = lambda trials, validate=False: experiment(trials, seed, size, gen_open_region, [close_region], validate)
         case "reclose":
             assert_defined("TRegion")
             def gen_reopened_region(seed, size):
@@ -179,9 +192,9 @@ if __name__ == '__main__':
                 # Ensure the reopen succeeded
                 assert not TRegion.is_closed(r)
                 return r
-            run_trials = lambda trials: experiment(trials, seed, size, gen_reopened_region, [TRegion.close])
+            run_trials = lambda trials, validate=False: experiment(trials, seed, size, gen_reopened_region, [close_region], validate)
 
-    _ignore = run_trials(WARMUP)
+    _ignore = run_trials(WARMUP, validate=True)
     results = run_trials(args.trials)
 
     if args.output is not None:
