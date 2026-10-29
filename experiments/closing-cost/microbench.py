@@ -197,10 +197,13 @@ if __name__ == '__main__':
 
                 # Reopen it again
                 TRegion.close(r)
-                assert r.data is not None
+                data = r.data
+                r.data = None
+                r.data = data
 
                 # Ensure the reopen succeeded
-                assert not TRegion.is_closed(r)
+                if TRegion.is_closed(r):
+                    raise RuntimeError("the region was not reopened")
                 return r
             run_trials = lambda trials, validate=False: experiment(trials, seed, size, gen_reopened_region, [close_region], validate)
 
