@@ -2,11 +2,6 @@
 
 ## Paper
 
-- This artifact includes PyPerformance benchmarks that have been requested
-    as part of the conditional accept.
-- The test microbenchmark now uses the baseline commit `aeff92d8`
-    mentioned in section 7 instead of `754e7c9b`. The paper will
-    be adjusted to reflect this change.
 - The figure, section and table numbers refer to the numbers of the conditionally
     accepted version of the paper. They may differ from the final version.
 
