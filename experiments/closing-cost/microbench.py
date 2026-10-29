@@ -14,6 +14,15 @@ DEFAULT_KEY_LEN = 8
 DEFAULT_TUPLE_LEN = 8
 WARMUP = 5
 
+# Oversized so striding through it evicts the working set from the CPU caches.
+_FLUSH_BYTES = 128 * 1024 * 1024
+_FLUSH_STRIDE = 32  # one byte per cache line
+_flush_buf = bytearray(_FLUSH_BYTES)
+_flush_fill = bytes((_FLUSH_BYTES + _FLUSH_STRIDE - 1) // _FLUSH_STRIDE)
+
+def flush_cpu_cache():
+    _flush_buf[::_FLUSH_STRIDE] = _flush_fill
+
 def from_immutable_import(name: str):
     try:
         mod = importlib.import_module("immutable")
@@ -126,6 +135,7 @@ def experiment(trials, seed, size, gen_data, steps, validate=False):
         for step_idx in range(len(steps)):
             # Prep
             gc.collect()
+            flush_cpu_cache()
 
             # Benchmark
             start = timer()
