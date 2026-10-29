@@ -26,6 +26,7 @@ sys.path.insert(0, str(SCRIPT_DIR.parent.parent / "scripts"))
 import artifact_config as cfg  # noqa: E402
 import console  # noqa: E402
 import pyperf  # noqa: E402
+import results  # noqa: E402
 
 RUN_DIR = cfg.ARTIFACT_ROOT / "build" / "pyperf"
 COMPARE_DIR = pyperf.RESULTS_DIR / "_compare"
@@ -74,8 +75,7 @@ def run_build(config: cfg.Config, pc: pyperf.PyperfConfig, build: cfg.Build, for
     return out
 
 
-def compare(config: cfg.Config, baseline: Path, candidate: Path, label: str) -> Path:
-    COMPARE_DIR.mkdir(parents=True, exist_ok=True)
+def compare(config: cfg.Config, baseline: Path, candidate: Path, label: str, out_dir: Path) -> Path:
     result = subprocess.run(
         [
             str(config.stable_python_bin), "-m", "pyperformance", "compare",
@@ -86,21 +86,21 @@ def compare(config: cfg.Config, baseline: Path, candidate: Path, label: str) -> 
     table = "\n".join(
         line for line in result.stdout.splitlines() if not SEPARATOR_RE.match(line)
     )
-    txt = COMPARE_DIR / f"{label}.txt"
+    txt = out_dir / f"{label}.txt"
     txt.write_text(table + "\n")
     return txt
 
 
-def compare_all(config: cfg.Config, results: dict[str, Path]) -> None:
+def compare_all(config: cfg.Config, build_results: dict[str, Path], out_dir: Path) -> None:
     for config_name in config.configs:
-        baseline = results.get(f"{config_name}-baseline")
+        baseline = build_results.get(f"{config_name}-baseline")
         if baseline is None:
             console.info(f"no baseline result for {config_name}; skipping comparison")
             continue
         for snapshot in config.snapshots:
             if snapshot.name == "baseline":
                 continue
-            candidate = results.get(f"{config_name}-{snapshot.name}")
+            candidate = build_results.get(f"{config_name}-{snapshot.name}")
             if candidate is None:
                 continue
             label = f"{config_name}-{snapshot.name}"
@@ -108,7 +108,7 @@ def compare_all(config: cfg.Config, results: dict[str, Path]) -> None:
                 f"plot {label}",
                 [
                     str(config.stable_python_bin), str(PLOT_PY),
-                    str(baseline), str(candidate), str(COMPARE_DIR / f"{label}.pdf"),
+                    str(baseline), str(candidate), str(out_dir / f"{label}.pdf"),
                 ],
             )
 
@@ -177,13 +177,18 @@ def main() -> None:
         if unknown:
             sys.exit(f"error: unknown build id(s): {', '.join(sorted(unknown))}")
 
-    results: dict[str, Path] = {}
+    build_results: dict[str, Path] = {}
     for build in builds:
         out = run_build(config, pc, build, args.force)
         if out is not None:
-            results[build.id] = out
-    compare_all(config, results)
-    console.success(f"benchmarked {len(results)} build(s)")
+            build_results[build.id] = out
+
+    # The per-config comparison tables/plots are regenerated every run, so stage
+    # them in a timestamped archive dir and only copy up to _compare on success.
+    output = results.RunOutput(COMPARE_DIR)
+    compare_all(config, build_results, output.start())
+    output.publish()
+    console.success(f"benchmarked {len(build_results)} build(s)")
 
 
 if __name__ == "__main__":

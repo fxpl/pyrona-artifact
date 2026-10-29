@@ -33,7 +33,7 @@ class Step:
 
 
 def build_steps(config: cfg.Config) -> list[Step]:
-    run_py = [sys.executable, str(EXPERIMENTS / "pyperformance" / "run.py")]
+    pyperf_run = [sys.executable, str(EXPERIMENTS / "pyperformance" / "run.py")]
     tests_run = str(EXPERIMENTS / "tests" / "run.py")
 
     steps = [
@@ -44,7 +44,7 @@ def build_steps(config: cfg.Config) -> list[Step]:
                 for build in config.builds
             ],
         ),
-        Step("pyperformance env check", [*run_py, "--check-env"]),
+        Step("pyperformance env check", [*pyperf_run, "--check-env"]),
         Step(
             "benchmark trial: subinterpreters",
             [
@@ -59,16 +59,15 @@ def build_steps(config: cfg.Config) -> list[Step]:
         Step(
             "benchmark trial: pickling-vs-freezing",
             [
-                "bash", str(EXPERIMENTS / "pickling-vs-freeze" / "run.sh"),
-                "--size", "10",
-                "--num-trials", "1",
-                "--cleanup-results",
+                sys.executable, str(EXPERIMENTS / "closing-cost" / "run.py"),
+                "--sizes", "10",
+                "--trials", "2",
             ],
         ),
         Step(
             "benchmark trial: pyperformance",
             children=[
-                Step(build.id, [*run_py, "--only", build.id, "--mode", "single", "--force"])
+                Step(build.id, [*pyperf_run, "--only", build.id, "--mode", "single", "--force"])
                 for build in config.builds
             ],
             full_only=True,
