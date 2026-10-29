@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG APP_DIR=/artifact
-ARG CPYTHON_MAKE_JOBS=4
+ARG CPYTHON_MAKE_JOBS=8
 ENV APP_DIR=${APP_DIR}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
