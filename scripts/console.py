@@ -12,6 +12,7 @@ indented streaming so the full log is preserved.
 
 from __future__ import annotations
 
+import atexit
 import os
 import queue
 import re
@@ -52,6 +53,13 @@ def _c(code: str, text: str) -> str:
     return f"\033[{code}m{text}\033[0m" if _use_color() else text
 
 
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
+
 def _term_width() -> int:
     return shutil.get_terminal_size(fallback=(100, 24)).columns
 
@@ -76,6 +84,58 @@ def _write_log(headline: str, lines: list[str], command: str | None = None,
     body = "\n".join([*header, "", *lines]) if header else "\n".join(lines)
     path.write_text(body + "\n", encoding="utf-8")
     return path
+
+
+# --- full-log transcript ----------------------------------------------------
+
+def _full_log_enabled() -> bool:
+    val = os.environ.get("ARTIFACT_FULL_LOG", "")
+    return val.strip().lower() not in ("", "0", "false", "no", "off")
+
+
+class _Transcript:
+    """Streams the complete, fully expanded run log into one file.
+
+    Enabled by ``ARTIFACT_FULL_LOG``. Unlike the live view it never collapses a
+    section or clips a command's output, so the file is the whole story even
+    when the terminal only showed a scrolling tail. Lines are written as they
+    happen and flushed at most once a second, so a multi-hour run neither buffers
+    gigabytes in memory nor loses its tail if the process is killed.
+    """
+
+    FLUSH_INTERVAL = 1.0
+
+    def __init__(self) -> None:
+        self.enabled = _full_log_enabled()
+        self.path: Path | None = None
+        self._fh = None
+        self._last_flush = 0.0
+
+    def line(self, depth: int, text: str) -> None:
+        if not self.enabled:
+            return
+        if self._fh is None:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
+            self.path = LOG_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}_full.log"
+            self._fh = self.path.open("w", encoding="utf-8")
+            print(f"full log -> {self.path}", flush=True)
+        self._fh.write(INDENT * depth + _strip_ansi(text) + "\n")
+        now = time.monotonic()
+        if now - self._last_flush >= self.FLUSH_INTERVAL:
+            self._fh.flush()
+            self._last_flush = now
+
+    def close(self) -> None:
+        if self._fh is None:
+            return
+        self._fh.flush()
+        self._fh.close()
+        self._fh = None
+        print(f"full log written to {self.path}", flush=True)
+
+
+_T = _Transcript()
+atexit.register(_T.close)
 
 
 # --- renderer ---------------------------------------------------------------
@@ -162,14 +222,17 @@ class _Renderer:
 
     # standalone messages --------------------------------------------------
 
-    def message(self, mark: str, color: str, msg: str) -> None:
+    def message(self, mark: str, color: str, msg: str, *, record: bool = True) -> None:
+        if record:
+            _T.line(self.depth, f"{mark} {msg}")
         self._commit([f"{INDENT * self.depth}{_c(color, mark)} {msg}"])
 
     # sections -------------------------------------------------------------
 
     def open(self, title: str, collapse: bool) -> None:
+        _T.line(self.depth, f"• {title}")
         if not _interactive():
-            self.message("•", "36", title)
+            self.message("•", "36", title, record=False)
         self.stack.append(_Section(title, collapse))
         self.redraw(force=True)
 
@@ -185,8 +248,9 @@ class _Renderer:
         summary = f"{_c(color, mark)} {_c('1', sec.title)}"
         kept = [] if (ok and sec.collapse) else [INDENT + ch for ch in sec.children]
 
+        _T.line(self.depth, f"{mark} {sec.title}")
         if not _interactive():
-            self.message(mark, color, sec.title)
+            self.message(mark, color, sec.title, record=False)
         elif self.stack:
             parent = self.stack[-1]
             parent.children.append(summary)
@@ -203,13 +267,15 @@ class _Renderer:
 
     def start(self, headline: str, tail: int) -> None:
         self.active = _Active(headline, deque(maxlen=tail))
+        _T.line(self.depth, f"• {headline}")
         if not _interactive():
-            self.message("•", "36", headline)
+            self.message("•", "36", headline, record=False)
         self.redraw(force=True)
 
     def feed(self, line: str) -> None:
         if self.active is None:
             return
+        _T.line(self.depth, f"{GUTTER}{line}")
         if _interactive():
             self.active.tail.append(line)
             self.redraw()
@@ -219,6 +285,7 @@ class _Renderer:
     def finish_ok(self) -> None:
         assert self.active is not None
         summary = f"{_c('32', '✓')} {self.active.headline}"
+        _T.line(self.depth, f"✓ {self.active.headline}")
         self.active = None
         if _interactive() and self.stack:
             self.stack[-1].children.append(summary)
@@ -234,6 +301,9 @@ class _Renderer:
         """
         headline = self.active.headline if self.active else "(step)"
         self.active = None
+        _T.line(self.depth, f"✗ {headline}")
+        _T.line(self.depth, f"{GUTTER}({reason})")
+        _T.line(self.depth, f"{GUTTER}Full log: {log_path}")
         lines = [
             f"{_c('31', '✗')} {headline}",
             _c("2", f"{GUTTER}({reason})"),
@@ -248,11 +318,12 @@ class _Renderer:
 
     def child(self, text: str) -> None:
         """Add a standalone child line (e.g. a skipped step) to the section."""
+        depth = self.depth + 1 if self.stack else self.depth
+        _T.line(depth, text)
         if _interactive() and self.stack:
             self.stack[-1].children.append(text)
             self.redraw(force=True)
         else:
-            depth = self.depth + 1 if self.stack else self.depth
             print(INDENT * depth + text, flush=True)
 
     def fail(self, detail: list[str]) -> None:
@@ -450,6 +521,8 @@ def run(
             detail.append(ind + _c("2", f"{GUTTER}… {omitted} earlier line(s) in the log"))
         detail += [ind + GUTTER + line for line in shown]
     detail.append(ind + _c("2", f"  full log: {log_path}"))
+    _T.line(_R.depth, f"✗ {headline} ({reason})")
+    _T.line(_R.depth, f"  full log: {log_path}")
     _R.fail(detail)
 
     if check:

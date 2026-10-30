@@ -57,7 +57,7 @@ def build_steps(config: cfg.Config) -> list[Step]:
             ],
         ),
         Step(
-            "benchmark trial: pickling-vs-freezing",
+            "benchmark trial: Closing Cost",
             [
                 sys.executable, str(EXPERIMENTS / "closing-cost" / "run.py"),
                 "--sizes", "10",
