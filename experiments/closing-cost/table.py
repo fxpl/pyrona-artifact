@@ -33,8 +33,8 @@ RUN_DIR = cfg.ARTIFACT_ROOT / "build" / "closing-cost"
 CONFIGS = ["gil", "nogil"]
 DATA_ORDER = ["built-in", "user-defined"]
 DATA_LABEL = {"built-in": "Built-in types", "user-defined": "User-defined types"}
-SIZES = [100, 1_000, 100_000]
-SIZE_LABEL = {100: "100", 1_000: "1k", 100_000: "100k"}
+SIZES = [100, 1_000, 10_000, 100_000]
+SIZE_LABEL = {1: "1", 10: "10", 100: "100", 1_000: "1k", 10_000: "10k", 100_000: "100k"}
 
 @dataclass(frozen=True)
 class Column:
