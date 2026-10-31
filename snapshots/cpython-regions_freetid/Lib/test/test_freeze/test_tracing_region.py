@@ -54,6 +54,13 @@ class TestTracing(unittest.TestCase):
             cm.exception.__notes__,
             ["set PYTHON_REGION_GRAPH=<file> to write the region's object graph as a mermaid diagram"])
 
+    @unittest.skipIf(sys.flags.ignore_environment,
+                     "-E makes Py_GETENV ignore PYTHON_REGION_GRAPH")
+    def test_release_error_graph_file(self):
+        r = Region()
+        r.x = [1]
+        x = r.x
+
         with os_helper.temp_dir() as tmp:
             path = f"{tmp}/graph.md"
             with os_helper.EnvironmentVarGuard() as env:

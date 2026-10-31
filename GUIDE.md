@@ -9,8 +9,6 @@ Note: This file is auto generated based on comments in the code base.
 
 ## Benchmarking
 
-- Microbenchmark: Freezing vs. Pickling and Unpickling:
-    - [./experiments/pickling-vs-freeze/README.md Line 3](./experiments/pickling-vs-freeze/README.md#L3)
 - PyPerformance Benchmarks:
     - [./experiments/pyperformance/README.md Line 3](./experiments/pyperformance/README.md#L3)
 - Microbenchmark: Direct Sharing Across Sub-interpreters:
