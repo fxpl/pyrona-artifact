@@ -6,14 +6,14 @@
 #   scripts/setup/1_build_cpython.py       -> uses [config.*] configure_flags
 
 [config.gil]
-configure_flags = ["--enable-optimizations", "--with-mimalloc", "--without-pymalloc"]
+configure_flags = ["--enable-optimizations", "--with-mimalloc"]
 
 [config.nogil]
 configure_flags = ["--enable-optimizations", "--disable-gil"]
 
 [snapshot.baseline]
 repo = "git@github.com:fxpl/cpython.git"
-ref = "d220409a13b" # v3.15.0 tagged 2026-10-09
+ref = "b701672c1a5" # Python 3.15.0 with mimalloc as the default
 config = ["gil", "nogil"]
 
 [snapshot.immutability]
@@ -23,12 +23,12 @@ config = ["gil", "nogil"]
 
 [snapshot.regions]
 repo = "git@github.com:fxpl/cpython.git"
-ref = "1e844f24131"
+ref = "d8171c62bd6"
 config = ["gil", "nogil"]
 
 [snapshot.regions_freetid]
 repo = "git@github.com:fxpl/cpython.git"
-ref = "60390edee8e"
+ref = "680c4283d35"
 config = ["nogil"]
 
 [stable]
