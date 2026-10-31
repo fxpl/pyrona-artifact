@@ -46,17 +46,6 @@ def build_steps(config: cfg.Config) -> list[Step]:
         ),
         Step("pyperformance env check", [*pyperf_run, "--check-env"]),
         Step(
-            "benchmark trial: subinterpreters",
-            [
-                "bash",
-                str(EXPERIMENTS / "subinterpreters" / "immutable-matrix-inversion" / "run.sh"),
-                "--workers-max", "4",
-                "--values-per-worker", "10",
-                "--num-trials", "1",
-                "--cleanup-results",
-            ],
-        ),
-        Step(
             "benchmark trial: Closing Cost",
             [
                 sys.executable, str(EXPERIMENTS / "closing-cost" / "run.py"),
