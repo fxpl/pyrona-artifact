@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import artifact_config as cfg  # noqa: E402
 
 CONFIG_PATH = cfg.ARTIFACT_ROOT / "experiments" / "pyperformance" / "config.toml"
-RESULTS_DIR = cfg.ARTIFACT_ROOT / "build" / "results" / "pyperformance"
+RESULTS_DIR = cfg.ARTIFACT_ROOT / "results" / "pyperf"
 REFERENCES_DIR = cfg.ARTIFACT_ROOT / "experiments" / "pyperformance" / "references"
 STABLE_LOCK = cfg.ARTIFACT_ROOT / "uv" / "stable" / "uv.lock"
 

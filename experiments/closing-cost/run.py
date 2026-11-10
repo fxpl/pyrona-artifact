@@ -4,7 +4,7 @@
 Each operation is benchmarked with the interpreter(s) whose snapshot implements
 it: pickling on baseline, freeze on immutability, and close/reclose on both
 regions and regions_freetid. Every run dumps its raw per-trial numbers (plus the
-configuration) to its own JSON file under ``build/closing-cost``; the plotting script
+configuration) to its own JSON file under ``results/closing-cost``; the plotting script
 computes mean/stddev/etc. from those. Unlike pyperformance, these benchmarks are
 cheap, so there is no result caching — a run always re-measures.
 
@@ -28,7 +28,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 import table  # noqa: E402
 
 MICROBENCH = SCRIPT_DIR / "microbench.py"
-RUN_DIR = cfg.ARTIFACT_ROOT / "build" / "closing-cost"
+RUN_DIR = cfg.ARTIFACT_ROOT / "results" / "closing-cost"
 
 DATA = ["built-in", "user-defined"]
 SIZES = [1, 10, 100, 1_000, 10_000, 100_000]

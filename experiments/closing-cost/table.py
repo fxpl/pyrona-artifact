@@ -2,7 +2,7 @@
 """Render the closing-cost microbenchmark results as standalone LaTeX tables.
 
 Reads the raw per-trial JSON files written by ``run.py`` under
-``build/closing-cost`` and emits one standalone, compilable table per interpreter
+``results/closing-cost`` and emits one standalone, compilable table per interpreter
 config (``gil`` and ``nogil``). Each table is written as ``closing-cost-<config>.tex``
 and, unless ``--no-compile`` is given, compiled to ``closing-cost-<config>.pdf`` so it
 can be ``\\includegraphics``'d into the paper.
@@ -28,7 +28,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent.parent / "scripts"))
 import artifact_config as cfg  # noqa: E402
 
-RUN_DIR = cfg.ARTIFACT_ROOT / "build" / "closing-cost"
+RUN_DIR = cfg.ARTIFACT_ROOT / "results" / "closing-cost"
 
 CONFIGS = ["gil", "nogil"]
 DATA_ORDER = ["built-in", "user-defined"]
