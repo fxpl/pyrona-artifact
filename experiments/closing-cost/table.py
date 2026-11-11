@@ -53,8 +53,8 @@ COLUMNS = [
     Column("freeze", "Freezing", "immutability", "freeze"),
     Column("close", "Closing", "regions", "close"),
     Column("reclose", "Reclosing", "regions", "reclose"),
-    Column("close_tid", "Closing (TID)", "regions_freetid", "close"),
-    Column("reclose_tid", "Reclosing (TID)", "regions_freetid", "reclose"),
+    Column("close_tid", "Closing (OPT)", "regions_optimizations", "close"),
+    Column("reclose_tid", "Reclosing (OPT)", "regions_optimizations", "reclose"),
 ]
 
 BY_SOURCE = {(c.snapshot, c.operation): c for c in COLUMNS}
@@ -182,7 +182,7 @@ def fastest_keys(cell: dict[str, Measure]) -> set[str]:
 def build_tex(table: Table) -> str:
     """Fill the template, including only columns that have data for this config.
 
-    The freetid build is nogil-only, so its TID columns are dropped entirely
+    The regions_optimizations build is nogil-only, so its TID columns are dropped entirely
     (not left blank) from a config that never measured them.
     """
     factor = UNIT[0]

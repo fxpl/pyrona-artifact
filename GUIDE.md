@@ -20,7 +20,7 @@ Note: This file is auto generated based on comments in the code base.
 - The implementation of immutability related decorators:
     - [./snapshots/cpython-regions/Lib/immutable.py Line 55](./snapshots/cpython-regions/Lib/immutable.py#L55)
 - The implementation of immutability related decorators:
-    - [./snapshots/cpython-regions_freetid/Lib/immutable.py Line 55](./snapshots/cpython-regions_freetid/Lib/immutable.py#L55)
+    - [./snapshots/cpython-regions_optimizations/Lib/immutable.py Line 55](./snapshots/cpython-regions_optimizations/Lib/immutable.py#L55)
 
 ## Tests
 
@@ -31,7 +31,7 @@ Note: This file is auto generated based on comments in the code base.
 - The collection of tests for immutability:
     - [./snapshots/cpython-regions/Lib/test/test_freeze/README.md Line 4](./snapshots/cpython-regions/Lib/test/test_freeze/README.md#L4)
 - The collection of tests for immutability:
-    - [./snapshots/cpython-regions_freetid/Lib/test/test_freeze/README.md Line 4](./snapshots/cpython-regions_freetid/Lib/test/test_freeze/README.md#L4)
+    - [./snapshots/cpython-regions_optimizations/Lib/test/test_freeze/README.md Line 4](./snapshots/cpython-regions_optimizations/Lib/test/test_freeze/README.md#L4)
 
 ## Implementation
 
@@ -68,21 +68,21 @@ Note: This file is auto generated based on comments in the code base.
 - The branch that allows direct sharing for immutable object across sub-interpreters:
     - [./snapshots/cpython-regions/Python/crossinterp.c Line 493](./snapshots/cpython-regions/Python/crossinterp.c#L493)
 - The definition of the `Py_CHECKWRITE` macro:
-    - [./snapshots/cpython-regions_freetid/Include/refcount.h Line 271](./snapshots/cpython-regions_freetid/Include/refcount.h#L271)
+    - [./snapshots/cpython-regions_optimizations/Include/refcount.h Line 271](./snapshots/cpython-regions_optimizations/Include/refcount.h#L271)
 - The implementation of the `InterpreterLocal` type:
-    - [./snapshots/cpython-regions_freetid/Modules/_immutablemodule.c Line 270](./snapshots/cpython-regions_freetid/Modules/_immutablemodule.c#L270)
+    - [./snapshots/cpython-regions_optimizations/Modules/_immutablemodule.c Line 270](./snapshots/cpython-regions_optimizations/Modules/_immutablemodule.c#L270)
 - The implementation of the `SharedField` type:
-    - [./snapshots/cpython-regions_freetid/Modules/_immutablemodule.c Line 436](./snapshots/cpython-regions_freetid/Modules/_immutablemodule.c#L436)
+    - [./snapshots/cpython-regions_optimizations/Modules/_immutablemodule.c Line 436](./snapshots/cpython-regions_optimizations/Modules/_immutablemodule.c#L436)
 - The pre-freeze hook of function objects:
-    - [./snapshots/cpython-regions_freetid/Objects/funcobject.c Line 1277](./snapshots/cpython-regions_freetid/Objects/funcobject.c#L1277)
+    - [./snapshots/cpython-regions_optimizations/Objects/funcobject.c Line 1277](./snapshots/cpython-regions_optimizations/Objects/funcobject.c#L1277)
 - This turns an existing ModuleObject into a proxy object::
-    - [./snapshots/cpython-regions_freetid/Objects/moduleobject.c Line 1884](./snapshots/cpython-regions_freetid/Objects/moduleobject.c#L1884)
+    - [./snapshots/cpython-regions_optimizations/Objects/moduleobject.c Line 1884](./snapshots/cpython-regions_optimizations/Objects/moduleobject.c#L1884)
 - The atomic RC branch for immutable objects in Py_INCREF.:
-    - [./snapshots/cpython-regions_freetid/Objects/object.c Line 374](./snapshots/cpython-regions_freetid/Objects/object.c#L374)
+    - [./snapshots/cpython-regions_optimizations/Objects/object.c Line 374](./snapshots/cpython-regions_optimizations/Objects/object.c#L374)
 - Explanation how weak references work for immutable objects:
-    - [./snapshots/cpython-regions_freetid/Objects/weakrefobject.c Line 36](./snapshots/cpython-regions_freetid/Objects/weakrefobject.c#L36)
+    - [./snapshots/cpython-regions_optimizations/Objects/weakrefobject.c Line 36](./snapshots/cpython-regions_optimizations/Objects/weakrefobject.c#L36)
 - The branch that allows direct sharing for immutable object across sub-interpreters:
-    - [./snapshots/cpython-regions_freetid/Python/crossinterp.c Line 493](./snapshots/cpython-regions_freetid/Python/crossinterp.c#L493)
+    - [./snapshots/cpython-regions_optimizations/Python/crossinterp.c Line 493](./snapshots/cpython-regions_optimizations/Python/crossinterp.c#L493)
 
 <!-- ARTIFACT_GUIDE:END -->
 

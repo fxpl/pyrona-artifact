@@ -23,12 +23,12 @@ config = ["gil", "nogil"]
 
 [snapshot.regions]
 repo = "git@github.com:fxpl/cpython.git"
-ref = "d8171c62bd6"
+ref = "3de0f6ae8ae"
 config = ["gil", "nogil"]
 
-[snapshot.regions_freetid]
+[snapshot.regions_optimizations]
 repo = "git@github.com:fxpl/cpython.git"
-ref = "680c4283d35"
+ref = "537efd29886"
 config = ["nogil"]
 
 [stable]

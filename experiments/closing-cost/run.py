@@ -3,7 +3,7 @@
 
 Each operation is benchmarked with the interpreter(s) whose snapshot implements
 it: pickling on baseline, freeze on immutability, and close/reclose on both
-regions and regions_freetid. Every run dumps its raw per-trial numbers (plus the
+regions and regions_optimizations. Every run dumps its raw per-trial numbers (plus the
 configuration) to its own JSON file under ``results/closing-cost``; the plotting script
 computes mean/stddev/etc. from those. Unlike pyperformance, these benchmarks are
 cheap, so there is no result caching — a run always re-measures.
@@ -38,8 +38,8 @@ DEFAULT_TRIALS = 100
 OP_SNAPSHOTS = {
     "pickling": ["baseline"],
     "freeze": ["immutability"],
-    "close": ["regions", "regions_freetid"],
-    "reclose": ["regions", "regions_freetid"],
+    "close": ["regions", "regions_optimizations"],
+    "reclose": ["regions", "regions_optimizations"],
 }
 
 
