@@ -9,8 +9,6 @@ Note: This file is auto generated based on comments in the code base.
 
 ## Benchmarking
 
-- Microbenchmark: Freezing vs. Pickling and Unpickling:
-    - [./experiments/pickling-vs-freeze/README.md Line 3](./experiments/pickling-vs-freeze/README.md#L3)
 - PyPerformance Benchmarks:
     - [./experiments/pyperformance/README.md Line 3](./experiments/pyperformance/README.md#L3)
 - Microbenchmark: Direct Sharing Across Sub-interpreters:
@@ -52,7 +50,7 @@ Note: This file is auto generated based on comments in the code base.
 - The branch that allows direct sharing for immutable object across sub-interpreters:
     - [./snapshots/cpython-immutability/Python/crossinterp.c Line 493](./snapshots/cpython-immutability/Python/crossinterp.c#L493)
 - The definition of the `Py_CHECKWRITE` macro:
-    - [./snapshots/cpython-regions/Include/refcount.h Line 271](./snapshots/cpython-regions/Include/refcount.h#L271)
+    - [./snapshots/cpython-regions/Include/refcount.h Line 274](./snapshots/cpython-regions/Include/refcount.h#L274)
 - The implementation of the `InterpreterLocal` type:
     - [./snapshots/cpython-regions/Modules/_immutablemodule.c Line 270](./snapshots/cpython-regions/Modules/_immutablemodule.c#L270)
 - The implementation of the `SharedField` type:
@@ -68,7 +66,7 @@ Note: This file is auto generated based on comments in the code base.
 - The branch that allows direct sharing for immutable object across sub-interpreters:
     - [./snapshots/cpython-regions/Python/crossinterp.c Line 493](./snapshots/cpython-regions/Python/crossinterp.c#L493)
 - The definition of the `Py_CHECKWRITE` macro:
-    - [./snapshots/cpython-regions_optimizations/Include/refcount.h Line 271](./snapshots/cpython-regions_optimizations/Include/refcount.h#L271)
+    - [./snapshots/cpython-regions_optimizations/Include/refcount.h Line 274](./snapshots/cpython-regions_optimizations/Include/refcount.h#L274)
 - The implementation of the `InterpreterLocal` type:
     - [./snapshots/cpython-regions_optimizations/Modules/_immutablemodule.c Line 270](./snapshots/cpython-regions_optimizations/Modules/_immutablemodule.c#L270)
 - The implementation of the `SharedField` type:

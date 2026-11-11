@@ -23,9 +23,9 @@ extern "C" {
 // reference counting so that they are not immediately deallocated when the
 // non-deferred reference count drops to zero.
 //
-// The value is half the maximum shared refcount because the low two bits of
+// The value is half the maximum shared refcount because the low three bits of
 // `ob_ref_shared` are used for flags.
-#define _Py_REF_DEFERRED (PY_SSIZE_T_MAX / 8)
+#define _Py_REF_DEFERRED (PY_SSIZE_T_MAX / 16)
 
 /* For backwards compatibility -- Do not use this */
 #define _Py_IsImmortalLoose(op) _Py_IsImmortal
@@ -171,7 +171,11 @@ static inline void _Py_RefcntAdd(PyObject* op, Py_ssize_t n)
         _Py_atomic_store_uint32_relaxed(&op->ob_ref_local, (uint32_t)refcnt);
     }
     else {
-        _Py_atomic_add_ssize(&op->ob_ref_shared, (n << _Py_REF_SHARED_SHIFT));
+        Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&op->ob_ref_shared);
+        while (!_Py_atomic_compare_exchange_ssize(
+                &op->ob_ref_shared, &shared,
+                (shared + (n << _Py_REF_SHARED_SHIFT)) & ~_Py_REF_REGION_RC_CHANGE)) {
+        }
     }
 #  ifdef Py_REF_DEBUG
     _Py_AddRefTotal(_PyThreadState_GET(), n);
@@ -281,13 +285,29 @@ _Py_DECREF_SPECIALIZED(PyObject *op, const destructor destruct)
 static inline int
 _Py_REF_IS_MERGED(Py_ssize_t ob_ref_shared)
 {
-    return (ob_ref_shared & _Py_REF_SHARED_FLAG_MASK) == _Py_REF_MERGED;
+    return (ob_ref_shared & _Py_REF_SHARED_BRC_FLAG_MASK) == _Py_REF_MERGED;
 }
 
 static inline int
 _Py_REF_IS_QUEUED(Py_ssize_t ob_ref_shared)
 {
-    return (ob_ref_shared & _Py_REF_SHARED_FLAG_MASK) == _Py_REF_QUEUED;
+    return (ob_ref_shared & _Py_REF_SHARED_BRC_FLAG_MASK) == _Py_REF_QUEUED;
+}
+
+// TRegions: Sets the RC change flag, see `_Py_REF_REGION_RC_CHANGE`.
+static inline void
+_PyObject_SetRegionRcChangeFlag(PyObject *op)
+{
+    _Py_atomic_or_uintptr((uintptr_t *)&op->ob_ref_shared,
+                          (uintptr_t)_Py_REF_REGION_RC_CHANGE);
+}
+
+// TRegions: Clears the RC change flag and returns the previous `ob_ref_shared`.
+static inline Py_ssize_t
+_PyObject_ClearRegionRcChangeFlag(PyObject *op)
+{
+    return (Py_ssize_t)_Py_atomic_and_uintptr(
+        (uintptr_t *)&op->ob_ref_shared, ~(uintptr_t)_Py_REF_REGION_RC_CHANGE);
 }
 
 // Merge the local and shared reference count fields and add `extra` to the
@@ -598,7 +618,7 @@ _PyObject_InitVar(PyVarObject *op, PyTypeObject *typeobj, Py_ssize_t size)
  * allows call sites to specialize for the immortal/local case.
  */
 static inline int
-_Py_TryIncrefFast(PyObject *op) {
+_Py_TryIncrefLocal(PyObject *op, bool claim_free) {
     uint32_t local = _Py_atomic_load_uint32_relaxed(&op->ob_ref_local);
     local += 1;
     if (local == 0) {
@@ -606,7 +626,9 @@ _Py_TryIncrefFast(PyObject *op) {
         _Py_INCREF_IMMORTAL_STAT_INC();
         return 1;
     }
-    if (_Py_IsOwnedByCurrentThread(op) || _Py_TryClaimFreeObject(op)) {
+    if (_Py_IsOwnedByCurrentThread(op)
+        || (claim_free && _Py_TryClaimFreeObject(op)))
+    {
         _Py_INCREF_STAT_INC();
         _Py_atomic_store_uint32_relaxed(&op->ob_ref_local, local);
 #ifdef Py_REF_DEBUG
@@ -618,20 +640,44 @@ _Py_TryIncrefFast(PyObject *op) {
 }
 
 static inline int
+_Py_TryIncrefFast(PyObject *op) {
+    return _Py_TryIncrefLocal(op, true);
+}
+
+
+extern PyAPI_FUNC(void) _Py_DecRefSharedNoClaim(PyObject *op);
+
+// Like `Py_DECREF()`, but never claims a free object.
+static inline void
+_Py_DecRefNoClaim(PyObject *op)
+{
+    if (_Py_IsImmortal(op) || _Py_IsOwnedByCurrentThread(op)) {
+        Py_DECREF(op);
+        return;
+    }
+    _Py_DECREF_STAT_INC();
+#ifdef Py_REF_DEBUG
+    _Py_DECREF_DecRefTotal();
+#endif
+    _Py_DecRefSharedNoClaim(op);
+}
+
+static inline int
 _Py_TryIncRefShared(PyObject *op)
 {
     Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&op->ob_ref_shared);
     for (;;) {
         // If the shared refcount is zero and the object is either merged
         // or may not have weak references, then we cannot incref it.
-        if (shared == 0 || shared == _Py_REF_MERGED) {
+        Py_ssize_t unflagged = shared & ~_Py_REF_REGION_RC_CHANGE;
+        if (unflagged == 0 || unflagged == _Py_REF_MERGED) {
             return 0;
         }
 
         if (_Py_atomic_compare_exchange_ssize(
                 &op->ob_ref_shared,
                 &shared,
-                shared + (1 << _Py_REF_SHARED_SHIFT))) {
+                unflagged + (1 << _Py_REF_SHARED_SHIFT))) {
 #ifdef Py_REF_DEBUG
             _Py_IncRefTotal(_PyThreadState_GET());
 #endif
@@ -641,18 +687,21 @@ _Py_TryIncRefShared(PyObject *op)
     }
 }
 
-/* Tries to incref the object op and ensures that *src still points to it. */
+/* Tries to incref the object op and ensures that *src still points to it.
+ *
+ * The reference is speculative, so free objects are never claimed: `op` may
+ * have moved into a region that closed before the incref. */
 static inline int
 _Py_TryIncrefCompare(PyObject **src, PyObject *op)
 {
-    if (_Py_TryIncrefFast(op)) {
+    if (_Py_TryIncrefLocal(op, false)) {
         return 1;
     }
     if (!_Py_TryIncRefShared(op)) {
         return 0;
     }
     if (op != _Py_atomic_load_ptr(src)) {
-        Py_DECREF(op);
+        _Py_DecRefNoClaim(op);
         return 0;
     }
     return 1;
@@ -704,8 +753,9 @@ _Py_NewRefWithLock(PyObject *op)
     _Py_INCREF_STAT_INC();
     for (;;) {
         Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&op->ob_ref_shared);
-        Py_ssize_t new_shared = shared + (1 << _Py_REF_SHARED_SHIFT);
-        if ((shared & _Py_REF_SHARED_FLAG_MASK) == 0) {
+        Py_ssize_t new_shared =
+            (shared + (1 << _Py_REF_SHARED_SHIFT)) & ~_Py_REF_REGION_RC_CHANGE;
+        if ((shared & _Py_REF_SHARED_BRC_FLAG_MASK) == 0) {
             new_shared |= _Py_REF_MAYBE_WEAKREF;
         }
         if (_Py_atomic_compare_exchange_ssize(
@@ -734,7 +784,7 @@ _PyObject_SetMaybeWeakref(PyObject *op)
     }
     for (;;) {
         Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&op->ob_ref_shared);
-        if ((shared & _Py_REF_SHARED_FLAG_MASK) != 0) {
+        if ((shared & _Py_REF_SHARED_BRC_FLAG_MASK) != 0) {
             // Nothing to do if it's in WEAKREFS, QUEUED, or MERGED states.
             return;
         }

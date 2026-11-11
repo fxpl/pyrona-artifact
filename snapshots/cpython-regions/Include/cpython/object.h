@@ -516,7 +516,6 @@ PyAPI_FUNC(int) PyUnstable_SetImmortal(PyObject *op);
 
 #if defined(Py_GIL_DISABLED)
 PyAPI_FUNC(uintptr_t) _Py_GetThreadLocal_Addr(void);
-PyAPI_FUNC(int) _Py_IsOwnedOrClearRcFlag(PyObject *ob);
 
 static inline uintptr_t
 _Py_ThreadId(void)

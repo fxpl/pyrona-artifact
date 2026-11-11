@@ -150,15 +150,6 @@ PyAPI_FUNC(void) _Py_NO_RETURN _Py_FatalErrorFunc(const char *, const char *);
     | _Py_FREEZABLE_SET_FLAG | _Py_PREFREEZE_RAN_FLAG)
 #endif // _Py_PYRONA_INTERPRETER_SHARING
 
-// TRegions: Indicates if the RC was increased by a non-owning thread since
-// the flag was set.
-//
-// Traces need to detect when a concurrent thread changes the RC
-// and thereby invalidated the trace. Just reading the RC is not strong enough
-// due to the ABA problem. This flag is set during tracing when the RC is
-// observed. Any (non-owning) concurrent thread will clear this flag on the
-// slow path.
-#define _Py_REGION_RC_CHANGE_FLAG (1 << 10)
 // TRegions: Set if this object is currently part of a trace. Any concurrent
 // traces will fail.
 //
@@ -174,7 +165,7 @@ PyAPI_FUNC(void) _Py_NO_RETURN _Py_FatalErrorFunc(const char *, const char *);
 // The region flags share bits with sub-interpreter-only immutability flags.
 #ifdef Py_GIL_DISABLED
 static_assert(
-    ((_Py_REGION_RC_CHANGE_FLAG | _Py_REGION_TRACE_FLAG) & _Py_IMMUTABLE_RESET_MASK) == 0,
+    (_Py_REGION_TRACE_FLAG & _Py_IMMUTABLE_RESET_MASK) == 0,
     "TRegions flags overlap with immutability flags");
 #endif
 
@@ -191,16 +182,28 @@ PyAPI_FUNC(void) _Py_IncRefShared(PyObject *);
 
 
 #ifdef Py_GIL_DISABLED
-   // The shared reference count uses the two least-significant bits to store
+   // The shared reference count uses the three least-significant bits to store
    // flags. The remaining bits are used to store the reference count.
-#  define _Py_REF_SHARED_SHIFT        2
-#  define _Py_REF_SHARED_FLAG_MASK    0x3
+#  define _Py_REF_SHARED_SHIFT            3
+#  define _Py_REF_SHARED_FLAG_MASK        0x7
+   // The two low bits hold the biased reference counting state.
+#  define _Py_REF_SHARED_BRC_FLAG_MASK    0x3
 
    // The shared flags are initialized to zero.
-#  define _Py_REF_SHARED_INIT         0x0
-#  define _Py_REF_MAYBE_WEAKREF       0x1
-#  define _Py_REF_QUEUED              0x2
-#  define _Py_REF_MERGED              0x3
+#  define _Py_REF_SHARED_INIT             0x0
+#  define _Py_REF_MAYBE_WEAKREF           0x1
+#  define _Py_REF_QUEUED                  0x2
+#  define _Py_REF_MERGED                  0x3
+
+   // TRegions: Indicates if the RC was increased by a non-owning thread since
+   // the flag was set.
+   //
+   // Traces need to detect when a concurrent thread changes the RC
+   // and thereby invalidated the trace. Just reading the RC is not strong
+   // enough due to the ABA problem. This flag is set during tracing when the
+   // RC is observed. Any (non-owning) concurrent incref clears it as part of
+   // the shared RC update. Decrefs and merges preserve it.
+#  define _Py_REF_REGION_RC_CHANGE        0x4
 
    // Create a shared field from a refcnt and desired flags
 #  define _Py_REF_SHARED(refcnt, flags) \

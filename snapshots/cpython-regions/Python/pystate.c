@@ -2823,23 +2823,6 @@ _Py_GetThreadLocal_Addr(void)
     return (uintptr_t)&_Py_tss_tstate;
 }
 
-static inline Py_ALWAYS_INLINE void
-_Py_CheckTracingFlag(PyObject *ob) {
-    if ((_Py_OB_FLAGS_LOAD(ob) & _Py_REGION_RC_CHANGE_FLAG) != 0) {
-        _Py_OB_FLAGS_REMOVE(ob, _Py_REGION_RC_CHANGE_FLAG);
-    }
-}
-
-int _Py_IsOwnedOrClearRcFlag(PyObject *ob) {
-    if (_Py_IsOwnedByCurrentThread(ob)) {
-        return 1;
-    }
-
-    // If the object is not owned by us, it may be part of a concurrent trace, so we
-    // clear the RC change flag.
-    _Py_CheckTracingFlag(ob);
-    return 0;
-}
 #endif
 
 /***********************************/

@@ -73,7 +73,7 @@ static inline int _is_dead(PyObject *obj)
     // unreachable.  See issue gh-60806.
 #if defined(Py_GIL_DISABLED)
     Py_ssize_t shared = _Py_atomic_load_ssize_relaxed(&obj->ob_ref_shared);
-    return shared == _Py_REF_SHARED(0, _Py_REF_MERGED);
+    return (shared & ~_Py_REF_REGION_RC_CHANGE) == _Py_REF_SHARED(0, _Py_REF_MERGED);
 #else
 #ifdef _Py_PYRONA_INTERPRETER_SHARING
     if (_Py_NeedsImmutableRC(obj)) {

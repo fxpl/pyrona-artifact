@@ -431,9 +431,9 @@ void* _PyObject_Realloc(void *ctx, void *ptr, size_t size);
 #  define PYMALLOC_ALLOC {NULL, _PyObject_Malloc, _PyObject_Calloc, _PyObject_Realloc, _PyObject_Free}
 #endif  // WITH_PYMALLOC
 
-#if defined(Py_GIL_DISABLED) || defined(_Py_PYRONA_INTERPRETER_SHARING)
-// Py_GIL_DISABLED and immutable object sharing require mimalloc for "mem"
-// and "obj" domains.
+#if defined(WITH_MIMALLOC)
+// mimalloc is the default when available
+// Py_GIL_DISABLED and _Py_PYRONA_INTERPRETER_SHARING require it.
 #  define PYRAW_ALLOC MIMALLOC_RAWALLOC
 #  define PYMEM_ALLOC MIMALLOC_ALLOC
 #  define PYOBJ_ALLOC MIMALLOC_OBJALLOC

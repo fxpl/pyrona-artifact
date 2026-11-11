@@ -10,6 +10,7 @@
 #include "pycore_critical_section.h" // _PyCriticalSection_Resume()
 #include "pycore_dtoa.h"          // _dtoa_state_INIT()
 #include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
+#include "pycore_gc.h"            // _PyObject_GC_SHOULD_RETRACH()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()
 #include "pycore_object.h"        // _PyType_InitCache()
@@ -2823,36 +2824,26 @@ _Py_GetThreadLocal_Addr(void)
     return (uintptr_t)&_Py_tss_tstate;
 }
 
-static inline Py_ALWAYS_INLINE void
-_Py_CheckTracingFlag(PyObject *ob) {
-    if ((_Py_OB_FLAGS_LOAD(ob) & _Py_REGION_RC_CHANGE_FLAG) != 0) {
-        _Py_OB_FLAGS_REMOVE(ob, _Py_REGION_RC_CHANGE_FLAG);
-    }
-}
 
 static inline Py_ALWAYS_INLINE int
-try_claim_free_object(PyObject *ob, bool check_flag) {
-    uintptr_t owner = _Py_atomic_load_uintptr(&ob->ob_tid);
-    uintptr_t this = _Py_ThreadId();
-    if (owner == this) {
-        return 1;
-    }
-
-    if (check_flag) {
-        // If the object is not owned by us, it may be part of a concurrent trace, so we
-        // clear the RC change flag.
-        //
-        // If the GC ran during a trace it may happen that the object is marked
-        // as FREE again. Therefore we need to check and clear the flag before checking
-        // for free.
-        _Py_CheckTracingFlag(ob);
-    }
-
+try_claim_free_object(PyObject *ob, bool clear_flag) {
     // If the object is currently free, we try to claim ownership
-    if (owner == _Py_FREE_TID
-        && _Py_atomic_compare_exchange_uintptr(&ob->ob_tid, &owner, this)
-    ) {
-        return 1;
+    uintptr_t owner = _Py_atomic_load_uintptr(&ob->ob_tid);
+    if (owner == _Py_FREE_TID) {
+        uintptr_t this = _Py_ThreadId();
+        if (_Py_atomic_compare_exchange_uintptr(&ob->ob_tid, &owner, this)) {
+            // We only need to clear the flag on succees, as failure will
+            // cause the caller to take the slow path and clear the flag there
+            if (clear_flag) {
+                _PyObject_ClearRegionRcChangeFlag(ob);
+            }
+            // Mutator discovery re-tracks a member lazily, including when the
+            // region has been opened since it was untracked.
+            if (_PyObject_GC_SHOULD_RETRACH(ob)) {
+                _PyObject_SET_GC_BITS(ob, _PyGC_BITS_TRACKED);
+            }
+            return 1;
+        }
     }
 
     return 0;

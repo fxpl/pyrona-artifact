@@ -54,6 +54,13 @@ class TestTracing(unittest.TestCase):
             cm.exception.__notes__,
             ["set PYTHON_REGION_GRAPH=<file> to write the region's object graph as a mermaid diagram"])
 
+    @unittest.skipIf(sys.flags.ignore_environment,
+                     "-E makes Py_GETENV ignore PYTHON_REGION_GRAPH")
+    def test_release_error_graph_file(self):
+        r = Region()
+        r.x = [1]
+        x = r.x
+
         with os_helper.temp_dir() as tmp:
             path = f"{tmp}/graph.md"
             with os_helper.EnvironmentVarGuard() as env:
@@ -856,6 +863,178 @@ class TestClosedRegionTeardown(unittest.TestCase):
 
         self.assertTrue(local.get(), "the deepest sub-region was not deleted")
 
+    @unittest.skipUnless(support.Py_GIL_DISABLED,
+                         "the remset only exists on free threading")
+    def test_cycle_through_immutable_deleted_by_collector(self):
+        """The collector doesn't see a closed region's contents, only its
+        remset. Unless the remset records edges to immutables, an immutable
+        leading back to the bridge looks externally referenced and keeps the
+        region alive forever."""
+        local = InterpreterLocal(False)
+
+        @freezable
+        class Recorder:
+            def __del__(self, local=local):
+                local.set(True)
+
+        def make_cycle():
+            r = Region()
+            # Enough members that the region closes with a remset
+            r.members = [Recorder() for _ in range(20)]
+            c = Mutex(r)
+            # bridge -> frozen tuple -> mutex -> bridge
+            r.back = deep_freeze((c,))
+            del r
+            c.release()
+
+        make_cycle()
+        gc.collect()
+
+        self.assertTrue(local.get(), "the region was not collected")
+
+    @unittest.skipUnless(support.Py_GIL_DISABLED,
+                         "the remset only exists on free threading")
+    def test_cycle_through_shared_immutable_deleted_by_collector(self):
+        """Like test_cycle_through_immutable_deleted_by_collector, but the
+        immutable is the type of many members. The remset holds one entry for
+        all their edges to it, which the collector must count in full."""
+        local = InterpreterLocal(False)
+
+        def make_cycle():
+            @freezable
+            class Recorder:
+                def __del__(self, local=local):
+                    local.set(True)
+
+            r = Region()
+            r.members = [Recorder() for _ in range(20)]
+            c = Mutex(r)
+            # bridge -> Recorder (frozen on close, 20 edges) -> mutex -> bridge
+            Recorder.back = c
+            del r
+            c.release()
+
+        make_cycle()
+        gc.collect()
+
+        self.assertTrue(local.get(), "the region was not collected")
+
+
+@unittest.skipUnless(support.Py_GIL_DISABLED,
+                     "the remset only exists on free threading")
+class TestRemset(unittest.TestCase):
+    """A closed region with a small remset hides its members from the
+    collector, which then only sees the bridge and its remset."""
+
+    @staticmethod
+    def tracked_ids():
+        return {id(obj) for obj in gc.get_objects()}
+
+    def test_single_object_stays_tracked(self):
+        @freezable
+        class A:
+            pass
+
+        r = Region()
+        r.a = A()
+        a_id = id(r.a)
+        Region.close(r)
+
+        self.assertIn(a_id, self.tracked_ids())
+
+    def test_many_objects_of_one_type_are_untracked(self):
+        @freezable
+        class A:
+            pass
+
+        r = Region()
+        r.objs = [A() for _ in range(100)]
+        member_ids = {id(r.objs)} | {id(obj) for obj in r.objs}
+        Region.close(r)
+
+        self.assertTrue(member_ids.isdisjoint(self.tracked_ids()))
+
+    def test_reopened_members_are_retracked(self):
+        @freezable
+        class A:
+            pass
+
+        r = Region()
+        r.objs = [A() for _ in range(100)]
+        member_ids = {id(r.objs)} | {id(obj) for obj in r.objs}
+        Region.close(r)
+        self.assertTrue(member_ids.isdisjoint(self.tracked_ids()))
+
+        # Accessing a member opens the region
+        self.assertEqual(len(r.objs), 100)
+        self.assertFalse(Region.is_closed(r))
+        gc.collect()
+
+        self.assertTrue(member_ids <= self.tracked_ids())
+
+    def test_sub_region_bridge_stays_tracked(self):
+        """The collector only sees a closed sub-region's remset by traversing
+        its bridge, so the bridge stays tracked while the members of both
+        regions are hidden."""
+        @freezable
+        class A:
+            pass
+
+        r = Region()
+        r.objs = [A() for _ in range(100)]
+        r.sub = Region()
+        r.sub.objs = [A() for _ in range(100)]
+        member_ids = {id(obj) for obj in r.objs}
+        sub_member_ids = {id(obj) for obj in r.sub.objs}
+        sub_id = id(r.sub)
+        Region.close(r)
+
+        tracked = self.tracked_ids()
+        self.assertIn(sub_id, tracked)
+        self.assertTrue(member_ids.isdisjoint(tracked))
+        self.assertTrue(sub_member_ids.isdisjoint(tracked))
+
+    def test_cycle_through_sub_region_deleted_by_collector(self):
+        """Every edge to a closed sub-region must be in the parent's remset.
+        Otherwise the sub-region's bridge looks externally referenced and
+        keeps a cycle through it alive."""
+        for edges in (1, 2, 5):
+            with self.subTest(edges=edges):
+                parent_dead = InterpreterLocal(False)
+                sub_dead = InterpreterLocal(False)
+
+                @freezable
+                class ParentRecorder:
+                    def __del__(self, local=parent_dead):
+                        local.set(True)
+
+                @freezable
+                class SubRecorder:
+                    def __del__(self, local=sub_dead):
+                        local.set(True)
+
+                def make_cycle():
+                    r = Region()
+                    r.objs = [ParentRecorder() for _ in range(100)]
+                    member_ids = {id(obj) for obj in r.objs}
+                    c = Mutex(r)
+                    sub = Region()
+                    sub.objs = [SubRecorder() for _ in range(100)]
+                    # parent bridge -> sub bridge -> mutex -> parent bridge
+                    sub.back = [c]
+                    r.subs = [sub] * edges
+                    del r, sub
+                    c.release()
+                    return member_ids
+
+                member_ids = make_cycle()
+                self.assertTrue(member_ids.isdisjoint(self.tracked_ids()),
+                                "the parent must close with a remset")
+                gc.collect()
+
+                self.assertTrue(parent_dead.get(), "the parent region was not collected")
+                self.assertTrue(sub_dead.get(), "the sub-region was not collected")
+
 
 class TestRegionRef(unittest.TestCase):
     """A region reference does not keep a region open. It checks on every
@@ -1622,7 +1801,7 @@ class TestFreeOwner(unittest.TestCase):
         self.assertEqual([o.tag for o in objs], list(range(self.N)))
 
     @threading_helper.reap_threads
-    def test_objects_of_other_threads_stay_unowned(self):
+    def test_objects_of_running_thread_become_free(self):
         @freezable
         class A:
             pass
@@ -1645,11 +1824,85 @@ class TestFreeOwner(unittest.TestCase):
             c.value.objs = handoff.pop()
             c.release()
             c.acquire()
-            # Merged refcounts are left alone, only our own objects become FREE
-            self.assertEqual(self.owners(c.value.objs), ["unowned"] * self.N)
+            # The owner merges the RCs via its eval breaker, the validation
+            # then adopts the merged objects and marks them as free.
+            self.assertEqual(self.owners(c.value.objs), ["free"] * self.N)
         finally:
             stop.set()
             owner.join()
+
+    @threading_helper.reap_threads
+    def test_close_frees_objects_of_exited_thread(self):
+        # The close merges the RCs of objects owned by other threads. The
+        # validation then has to adopt the merged objects to mark them free.
+        @freezable
+        class A:
+            pass
+
+        c = Mutex(Region())
+        c.value.objs = self.run_in_thread(lambda: [A() for _ in range(self.N)])
+        c.release()
+
+        c.acquire()
+        self.assertEqual(self.owners(c.value.objs), ["free"] * self.N)
+
+    @threading_helper.reap_threads
+    def test_close_frees_objects_of_blocked_thread(self):
+        @freezable
+        class A:
+            pass
+
+        handoff = []
+        allocated = threading.Event()
+        release_owner = threading.Event()
+
+        def allocate():
+            handoff.append([A() for _ in range(self.N)])
+            allocated.set()
+            # The owner is detached, so the close merges its RCs for it.
+            release_owner.wait(support.LONG_TIMEOUT)
+
+        owner = threading.Thread(target=allocate)
+        owner.start()
+        try:
+            self.assertTrue(allocated.wait(support.SHORT_TIMEOUT))
+            c = Mutex(Region())
+            c.value.objs = handoff.pop()
+            c.release()
+            c.acquire()
+            self.assertEqual(self.owners(c.value.objs), ["free"] * self.N)
+        finally:
+            release_owner.set()
+            owner.join()
+
+    @threading_helper.reap_threads
+    def test_adopted_objects_keep_their_rc(self):
+        # Adopting a merged object moves its RC from `ob_ref_shared` to
+        # `ob_ref_local`. Losing a reference would free the objects early,
+        # keeping one would leak them.
+        @freezable
+        class A:
+            pass
+
+        c = Mutex(Region())
+        c.value.objs = self.run_in_thread(lambda: [A() for _ in range(self.N)])
+        # A second reference to the first object
+        c.value.objs.append(c.value.objs[0])
+        refs = [weakref.ref(o) for o in c.value.objs[:self.N]]
+        c.release()
+
+        c.acquire()
+        self.assertEqual(self.owners(c.value.objs), ["free"] * (self.N + 1))
+        gc.collect()
+        self.assertTrue(all(r() is not None for r in refs))
+
+        c.value.objs.pop()
+        gc.collect()
+        self.assertTrue(all(r() is not None for r in refs))
+
+        c.value.objs = None
+        gc.collect()
+        self.assertTrue(all(r() is None for r in refs))
 
 
 @unittest.skipUnless(support.Py_GIL_DISABLED,
@@ -1799,6 +2052,7 @@ class TestConcurrentClose(unittest.TestCase):
         for _ in range(self.ITERATIONS):
             r = Region()
             r.objs = [A() for _ in range(100)]
+            member_ids = {id(obj) for obj in r.objs}
             wref = weakref.ref(r.objs[50])
             stop = threading.Event()
             started = threading.Event()
@@ -1815,6 +2069,13 @@ class TestConcurrentClose(unittest.TestCase):
                 Region.close(r)
             except RuntimeError as e:
                 self.assert_concurrent_error(e)
+                tracked_ids = {id(obj) for obj in gc.get_objects()}
+                if member_ids <= tracked_ids:
+                    # Running the GC should reset these
+                    gc.collect()
+                    tracked_ids = {id(obj) for obj in gc.get_objects()}
+                    assert(member_ids == tracked_ids)
+
                 self.assertIs(wref(), r.objs[50])
             finally:
                 stop.set()
