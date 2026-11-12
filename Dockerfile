@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG APP_DIR=/artifact
-ARG CPYTHON_MAKE_JOBS=4
+ARG CPYTHON_MAKE_JOBS=8
 ENV APP_DIR=${APP_DIR}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -54,11 +54,11 @@ EOF
 ENV BASH_ENV=/etc/profile.d/artifact-env.sh
 
 # Build snapshots and Python environments used by the artifact.
-RUN scripts/setup/1_build_cpython.sh --jobs ${CPYTHON_MAKE_JOBS}
-RUN scripts/setup/2_build_venv.sh
-RUN scripts/setup/3_pyperformance_setup.sh
+# env.env is a committed artifact (regenerated in the update phase), so setup
+# consumes it as-is.
+RUN scripts/setup/run_all.sh --jobs ${CPYTHON_MAKE_JOBS}
 
-RUN scripts/smoketest.sh --minimal
+RUN python3 scripts/smoketest.py --minimal
 
 EXPOSE 8501
 ENTRYPOINT ["/bin/bash","-lc","source \"$STABLE_PYTHON_ENV_ACTIVATE\" && python -m streamlit run app/immutability/Artifact.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true"]

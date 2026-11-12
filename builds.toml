@@ -1,0 +1,35 @@
+# Canonical build manifest for the Pyrona artifact.
+#
+# Consumers:
+#   scripts/update/0_generate_env.py       -> generates env.env from this file
+#   scripts/update/1_create_cpython_snapshots.py -> uses [snapshot.*] repo/ref
+#   scripts/setup/1_build_cpython.py       -> uses [config.*] configure_flags
+
+[config.gil]
+configure_flags = ["--enable-optimizations", "--with-mimalloc"]
+
+[config.nogil]
+configure_flags = ["--enable-optimizations", "--disable-gil"]
+
+[snapshot.baseline]
+repo = "git@github.com:fxpl/cpython.git"
+ref = "b701672c1a5" # Python 3.15.0 with mimalloc as the default
+config = ["gil", "nogil"]
+
+[snapshot.immutability]
+repo = "git@github.com:fxpl/cpython.git"
+ref = "immutable-nogil"
+config = ["gil", "nogil"]
+
+[snapshot.regions]
+repo = "git@github.com:fxpl/cpython.git"
+ref = "213b680295a"
+config = ["gil", "nogil"]
+
+[snapshot.regions_optimizations]
+repo = "git@github.com:fxpl/cpython.git"
+ref = "1279591e848"
+config = ["nogil"]
+
+[stable]
+python = "3.14.3"

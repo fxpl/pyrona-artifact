@@ -1,30 +1,18 @@
-# Artefact: "Dynamically Checked Deep Immutability in Python"
+# Artefact: "Weak Dynamic Region-based Ownership in a Concurrent, Non-Cooperative World"
 
-Our paper is a design paper, describing how deep immutability can
-be added to Python using dynamic checks. The design aims to be
-backwards compatible and allow sharing of immutable objects across
-sub-interpreters. The paper describes several problems and presents
-our solutions.
+WIP instructions and description.
 
 In this artifact we want to show our working implementation of the
 proposed design. We claim that this implementation is:
-- functional: We provide a working Python interpreter that implements deep immutability.
+- functional: We provide a working Python interpreter with our design.
 - reusable: Our patched version of CPython can be reused, as a baseline for further
     research exploring the design space. It include a snapshot of our modified
-    CPython version with all implementation details, including the reversible SCC
-    algorithm described in Section 7, atomic reference counting and inserted write
-    barriers. This artifact can be used as a reference for developers wanting to
-    implement immutability in their language or other Python runtimes.
+    CPython version with all implementation details.
 
 ## Artifact Information
 
 This artifact holds a snapshot of CPython and a patched CPython
-version with the modifications described in the paper. Differences
-between the paper and the implementation are documented in
-[DIFFERENCES.md](./DIFFERENCES.md)
-
-The [GUIDE.md](./GUIDE.md) file contains links to examples, benchmarks
-and implementation details that are part of this artifact.
+version with the modifications described in the paper.
 
 ## System requirements
 
@@ -115,13 +103,16 @@ PATH="/root/.local/bin:${PATH}"
 # Load Environment Variables
 source env.env
 
+# The scripts need Python 3.11+. If your default python3 is older, point PYTHON
+# at a newer interpreter; everything downstream inherits it.
+export PYTHON="${PYTHON:-python3}"
+
 # Build snapshots and Python environments used by the artifact.
-scripts/setup/1_build_cpython.sh
-scripts/setup/2_build_venv.sh
-scripts/setup/3_pyperformance_setup.sh
+# Extra arguments are forwarded to the CPython build (e.g. --jobs 8).
+scripts/setup/run_all.sh
 
 # Run minimal smoke test
-scripts/smoketest.sh --minimal
+"$PYTHON" scripts/smoketest.py --minimal
 ```
 
 You can start the website locally using this command:
@@ -135,7 +126,7 @@ deactivate
 You can also run benchmarks directly like this:
 
 ```bash
-benchmarks/pickling-vs-freeze/run.sh
+experiments/pickling-vs-freeze/run.sh
 ```
 
 ## Navigation
