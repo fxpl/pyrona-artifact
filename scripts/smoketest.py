@@ -32,9 +32,13 @@ class Step:
     full_only: bool = False  # only run in a non-minimal smoke test
 
 
+PYPERF_BUILD_IDS = {"gil-regions", "nogil-regions_optimizations"}
+
+
 def build_steps(config: cfg.Config) -> list[Step]:
     pyperf_run = [sys.executable, str(EXPERIMENTS / "pyperformance" / "run.py")]
     tests_run = str(EXPERIMENTS / "tests" / "run.py")
+    pyperf_builds = [b for b in config.builds if b.id in PYPERF_BUILD_IDS]
 
     steps = [
         Step(
@@ -57,7 +61,7 @@ def build_steps(config: cfg.Config) -> list[Step]:
             "benchmark trial: pyperformance",
             children=[
                 Step(build.id, [*pyperf_run, "--only", build.id, "--mode", "single", "--force"])
-                for build in config.builds
+                for build in pyperf_builds
             ],
             full_only=True,
         ),

@@ -11,7 +11,8 @@ online = false            # allow pyperformance to download benchmarks at run ti
 # Benchmarks excluded on every platform:
 #   genshi  — dies on baseline
 #   2to3    — requires external C libraries
-exclude = ["genshi", "2to3"]
+#   dask    - Requires recompiling to support the RC-flag
+exclude = ["genshi", "2to3", "dask"]
 
 # Additional exclusions keyed by platform.system().
 [pyperformance.exclude_by_os]
