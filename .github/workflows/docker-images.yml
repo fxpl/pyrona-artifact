@@ -24,7 +24,7 @@ permissions:
 
 env:
   IMAGE_NAME: pyrona-artifact
-  IMAGE_VERSION: immutability
+  IMAGE_VERSION: tregions
   CPYTHON_MAKE_JOBS: 4
 
 jobs:
