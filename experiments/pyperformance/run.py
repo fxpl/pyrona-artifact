@@ -91,7 +91,18 @@ def compare(config: cfg.Config, baseline: Path, candidate: Path, label: str, out
     return txt
 
 
+COMBINED_PLOT = "combined.pdf"
+CONFIG_DISPLAY_NAMES = {"gil": "GIL", "nogil": "free-threaded"}
+
+
+def panel_label(index: int, snapshot_name: str) -> str:
+    """'(e) regions +\\noptimizations' for snapshot 'regions_optimizations'."""
+    letter = chr(ord("a") + index)
+    return f"({letter}) " + " +\n".join(snapshot_name.split("_"))
+
+
 def compare_all(config: cfg.Config, build_results: dict[str, Path], out_dir: Path) -> None:
+    panels: list[str] = []
     for config_name in config.configs:
         baseline = build_results.get(f"{config_name}-baseline")
         if baseline is None:
@@ -111,6 +122,23 @@ def compare_all(config: cfg.Config, build_results: dict[str, Path], out_dir: Pat
                     str(baseline), str(candidate), str(out_dir / f"{label}.pdf"),
                 ],
             )
+            panels += [
+                "--panel",
+                CONFIG_DISPLAY_NAMES.get(config_name, config_name),
+                panel_label(len(panels) // 5, snapshot.name),
+                str(baseline),
+                str(candidate),
+            ]
+
+    # All comparisons stacked into one page-sized figure for the paper.
+    if panels:
+        console.run(
+            "plot combined",
+            [
+                str(config.stable_python_bin), str(PLOT_PY),
+                "--combined", str(out_dir / COMBINED_PLOT), *panels,
+            ],
+        )
 
 
 def check_env(config: cfg.Config) -> None:
